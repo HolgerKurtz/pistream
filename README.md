@@ -45,7 +45,14 @@ We use `uv` for fast dependency management.
 ### 1. Start the Streamer (Edge)
 
 **On the Raspberry Pi:**
-Transfer `pi_stream.py` and `requirements.txt` to the Pi, install dependencies, and run:
+Transfer `pi_stream.py` and `requirements-pi.txt` to the Pi.
+
+Install dependencies (minimal set for Pi Zero):
+```bash
+pip install -r requirements-pi.txt
+```
+
+Run the streamer:
 ```bash
 python3 pi_stream.py --port 5555
 ```
