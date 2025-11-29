@@ -25,8 +25,10 @@ def get_ip_address():
         s.close()
     return IP
 
+import io
+
 # A custom output that sends data via ZMQ
-class ZmqOutput:
+class ZmqOutput(io.BufferedIOBase):
     def __init__(self, socket):
         self.socket = socket
 
@@ -34,6 +36,7 @@ class ZmqOutput:
         # buf is the JPEG data
         # Send it directly via ZMQ
         self.socket.send(buf)
+        return len(buf)
 
 def main():
     parser = argparse.ArgumentParser(description='Pi Streamer (Picamera2 + ZMQ)')
