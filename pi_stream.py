@@ -1,8 +1,17 @@
-import cv2
+import time
 import zmq
 import socket
-import time
 import argparse
+import sys
+
+# Try importing Picamera2
+try:
+    from picam2 import Picamera2
+    from picam2.encoders import JpegEncoder
+    from picam2.outputs import FileOutput
+except ImportError:
+    print("Error: picam2 module not found. This script is intended for Raspberry Pi with libcamera.")
+    sys.exit(1)
 
 def get_ip_address():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -16,51 +25,58 @@ def get_ip_address():
         s.close()
     return IP
 
+# A custom output that sends data via ZMQ
+class ZmqOutput:
+    def __init__(self, socket):
+        self.socket = socket
+
+    def write(self, buf):
+        # buf is the JPEG data
+        # Send it directly via ZMQ
+        self.socket.send(buf)
+
 def main():
-    parser = argparse.ArgumentParser(description='Pi Streamer')
+    parser = argparse.ArgumentParser(description='Pi Streamer (Picamera2 + ZMQ)')
     parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
     args = parser.parse_args()
 
+    # Initialize ZMQ
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
-    # We bind to all interfaces
     socket.bind(f"tcp://*:{args.port}")
     
     ip = get_ip_address()
     print(f"Streamer started at tcp://{ip}:{args.port}")
 
-    # Initialize camera
-    # Using OpenCV's VideoCapture with V4L2 backend which is more stable on Pi
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    cap.set(cv2.CAP_PROP_FPS, 10)
+    # Initialize Picamera2
+    picam2 = Picamera2()
 
-    if not cap.isOpened():
-        print("Error: Could not open video device.")
-        return
+    # Configure the camera
+    # Low resolution and framerate for Pi Zero W
+    video_config = picam2.create_video_configuration(
+        main={"size": (640, 480)},
+        lores={"size": (640, 480)},
+        controls={"FrameRate": 15}
+    )
+    picam2.configure(video_config)
+
+    # Create our ZMQ output wrapper
+    zmq_output = ZmqOutput(socket)
+
+    # Start recording using JpegEncoder
+    # This uses the hardware JPEG encoder (if available) or optimized software encoder
+    picam2.start_recording(JpegEncoder(), FileOutput(zmq_output))
+
+    print("Streaming...")
 
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("Failed to grab frame")
-                break
-
-            # Compress frame to reduce bandwidth
-            # JPEG quality 80
-            _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            
-            # Send data
-            socket.send(buffer)
-            
-            # Optional: Sleep to strictly limit FPS if needed, but capture limit should handle it
-            # time.sleep(0.05) 
-
+            time.sleep(1)
     except KeyboardInterrupt:
         print("Stopping...")
     finally:
-        cap.release()
+        picam2.stop_recording()
+        picam2.close()
         socket.close()
         context.term()
 

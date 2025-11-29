@@ -19,9 +19,9 @@ graph LR
 
 ### Components
 
-*   **`pi_stream.py`**: Runs on the Raspberry Pi. Captures video from the camera, compresses it to JPEG, and streams it via ZeroMQ (TCP).
-*   **`server_inference.py`**: Runs on a powerful machine. Connects to the Pi's stream, decodes frames, and runs YOLOv8 tracking.
-*   **`mock_stream.py`**: A utility for testing the server without a physical Pi. Can stream from a webcam, video file, or generate noise.
+*   **`pi_stream.py`**: Runs on the Raspberry Pi. Uses `Picamera2` to capture video and `ZMQ` to stream JPEG frames.
+*   **`server_inference.py`**: Runs on a powerful machine. Connects to the Pi's ZMQ stream, decodes frames, and runs YOLOv8 tracking.
+*   **`mock_stream.py`**: A utility for testing. Mimics the Pi's ZMQ stream (from webcam, file, or noise).
 
 ## Installation
 
@@ -48,22 +48,10 @@ We use `uv` for fast dependency management.
 Transfer `pi_stream.py` and `requirements-pi.txt` to the Pi.
 
 Install dependencies:
-
-**Option A: Fast (Recommended for Pi Zero)**
-Use system packages to avoid compiling large libraries like OpenCV and NumPy.
 ```bash
-sudo apt update
-sudo apt install python3-opencv python3-numpy python3-zmq
-```
-*Note: You don't need a virtual environment with this method. Run the script directly.*
-
-**Option B: Virtual Environment (Slow)**
-If you prefer isolation, be aware that installing `opencv-python` and `numpy` via pip on a Pi Zero can take hours (compilation).
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements-pi.txt
 ```
+*Note: `picamera2` is usually pre-installed on Raspberry Pi OS. If not, install via `sudo apt install python3-libcamera`.*
 
 Run the streamer:
 ```bash
@@ -84,7 +72,7 @@ python3 mock_stream.py --source noise
 
 **On your Server/Mac:**
 ```bash
-python3 server_inference.py --host <PI_IP_OR_LOCALHOST>
+python3 server_inference.py --host <PI_IP_OR_LOCALHOST> --port 5555
 ```
 
 **Options:**
@@ -94,12 +82,12 @@ python3 server_inference.py --host <PI_IP_OR_LOCALHOST>
 ## Development
 
 *   **Requirements**: `ultralytics`, `opencv-python`, `zmq`, `imutils`, `lapx`.
-*   **Protocol**: ZMQ PUB/SUB pattern. Frames are JPEG encoded for bandwidth efficiency.
+*   **Protocol**: ZMQ PUB/SUB pattern. Frames are JPEG encoded.
 
 ## Troubleshooting
 
-### Pi Zero: "Failed to allocate required memory"
-This is a common issue when the GPU doesn't have enough memory assigned to handle the camera.
+### Pi Zero: "picam2 module not found"
+Ensure you are running on a Raspberry Pi with the latest OS (Bookworm or newer) and that `libcamera` is installed and working (`libcamera-hello`).
 1.  Run `sudo raspi-config`
 2.  Go to **Performance Options** -> **GPU Memory**
 3.  Set it to **128** (or higher)
