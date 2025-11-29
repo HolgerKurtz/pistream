@@ -47,8 +47,21 @@ We use `uv` for fast dependency management.
 **On the Raspberry Pi:**
 Transfer `pi_stream.py` and `requirements-pi.txt` to the Pi.
 
-Install dependencies (minimal set for Pi Zero):
+Install dependencies:
+
+**Option A: Fast (Recommended for Pi Zero)**
+Use system packages to avoid compiling large libraries like OpenCV and NumPy.
 ```bash
+sudo apt update
+sudo apt install python3-opencv python3-numpy python3-zmq
+```
+*Note: You don't need a virtual environment with this method. Run the script directly.*
+
+**Option B: Virtual Environment (Slow)**
+If you prefer isolation, be aware that installing `opencv-python` and `numpy` via pip on a Pi Zero can take hours (compilation).
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-pi.txt
 ```
 
@@ -82,3 +95,12 @@ python3 server_inference.py --host <PI_IP_OR_LOCALHOST>
 
 *   **Requirements**: `ultralytics`, `opencv-python`, `zmq`, `imutils`, `lapx`.
 *   **Protocol**: ZMQ PUB/SUB pattern. Frames are JPEG encoded for bandwidth efficiency.
+
+## Troubleshooting
+
+### Pi Zero: "Failed to allocate required memory"
+This is a common issue when the GPU doesn't have enough memory assigned to handle the camera.
+1.  Run `sudo raspi-config`
+2.  Go to **Performance Options** -> **GPU Memory**
+3.  Set it to **128** (or higher)
+4.  Reboot the Pi.

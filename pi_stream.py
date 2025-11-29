@@ -30,9 +30,8 @@ def main():
     print(f"Streamer started at tcp://{ip}:{args.port}")
 
     # Initialize camera
-    # Using OpenCV's VideoCapture which works with libcamera on newer Pi OS if configured correctly
-    # or legacy stack. For Pi Zero W, we want low resolution/fps for performance.
-    cap = cv2.VideoCapture(0)
+    # Using OpenCV's VideoCapture with V4L2 backend which is more stable on Pi
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     cap.set(cv2.CAP_PROP_FPS, 10)
