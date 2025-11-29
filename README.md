@@ -51,7 +51,7 @@ Install dependencies:
 ```bash
 pip install -r requirements-pi.txt
 ```
-*Note: `picamera2` is usually pre-installed on Raspberry Pi OS. If not, install via `sudo apt install python3-libcamera`.*
+*Note: `picamera2` is usually pre-installed on Raspberry Pi OS. If not, install via `sudo apt install python3-picamera2`.*
 
 Run the streamer:
 ```bash

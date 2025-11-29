@@ -6,11 +6,11 @@ import sys
 
 # Try importing Picamera2
 try:
-    from picam2 import Picamera2
-    from picam2.encoders import JpegEncoder
-    from picam2.outputs import FileOutput
+    from picamera2 import Picamera2
+    from picamera2.encoders import JpegEncoder
+    from picamera2.outputs import FileOutput
 except ImportError:
-    print("Error: picam2 module not found. This script is intended for Raspberry Pi with libcamera.")
+    print("Error: picamera2 module not found. This script is intended for Raspberry Pi with libcamera.")
     sys.exit(1)
 
 def get_ip_address():
