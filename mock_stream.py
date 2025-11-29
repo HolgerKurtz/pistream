@@ -1,22 +1,38 @@
 import cv2
 import zmq
 import time
-import argparse
 import numpy as np
+import os
+import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def main():
-    parser = argparse.ArgumentParser(description='Mock Streamer')
-    parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
-    parser.add_argument('--source', type=str, default='0', help='Video source (0 for webcam, or path to file)')
-    args = parser.parse_args()
+    # Get configuration from environment variables
+    port = int(os.getenv('PORT', 5555))
+    source = os.getenv('MOCK_SOURCE', '0') # Default to webcam 0
+
+    logger.info(f"Initializing Mock Streamer on port {port} with source {source}...")
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
-    socket.bind(f"tcp://*:{args.port}")
-    print(f"Mock Streamer started at tcp://*:{args.port}")
+    try:
+        socket.bind(f"tcp://*:{port}")
+        logger.info(f"Mock Streamer started at tcp://*:{port}")
+    except Exception as e:
+        logger.error(f"Failed to bind ZMQ socket: {e}")
+        return
 
     # Handle numeric source for webcam
-    source = args.source
     if source.isdigit():
         source = int(source)
 
@@ -24,7 +40,7 @@ def main():
     if source != 'noise':
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
-            print(f"Error: Could not open video source {source}")
+            logger.error(f"Error: Could not open video source {source}")
             return
 
     try:
@@ -36,7 +52,7 @@ def main():
             else:
                 ret, frame = cap.read()
                 if not ret:
-                    print("End of stream, restarting...")
+                    logger.info("End of stream, restarting...")
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
 
@@ -53,12 +69,15 @@ def main():
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("Stopping...")
+        logger.info("Stopping mock streamer...")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
     finally:
         if cap:
             cap.release()
         socket.close()
         context.term()
+        logger.info("Cleaned up resources.")
 
 if __name__ == "__main__":
     main()

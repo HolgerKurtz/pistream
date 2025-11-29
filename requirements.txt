@@ -5,3 +5,4 @@ imutils
 zmq
 pyzmq
 lapx
+python-dotenv

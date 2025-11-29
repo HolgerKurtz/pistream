@@ -6,46 +6,53 @@ A lightweight, split-architecture motion detection and object tracking system de
 
 This project uses a **Split Architecture** to overcome the limited processing power of the Raspberry Pi Zero W.
 *   **Edge (Raspberry Pi)**: Captures video and streams it efficiently over the network.
-*   **Server (PC/Cloud)**: Receives the stream and performs heavy-duty object detection using YOLOv8.
+*   **Server (PC/Cloud)**: Receives the stream and performs heavy-duty object detection using YOLO11.
 
 ## Architecture
 
 ```mermaid
 graph LR
     A[Raspberry Pi Zero W] -- ZMQ Stream (JPEG) --> B[Server / Cloud]
-    B -- Inference --> C[YOLOv8]
+    B -- Inference --> C[YOLO11]
     C -- Output --> D[Display / Log]
 ```
 
 ### Components
 
 *   **`pi_stream.py`**: Runs on the Raspberry Pi. Uses `Picamera2` to capture video and `ZMQ` to stream JPEG frames.
-*   **`server_inference.py`**: Runs on a powerful machine. Connects to the Pi's ZMQ stream, decodes frames, and runs YOLOv8 tracking.
+*   **`server_inference.py`**: Runs on a powerful machine. Connects to the Pi's ZMQ stream, decodes frames, and runs YOLO11 tracking.
 *   **`mock_stream.py`**: A utility for testing. Mimics the Pi's ZMQ stream (from webcam, file, or noise).
 
 ## Installation
 
 We use `uv` for fast dependency management.
 
-1.  **Clone the repository**:
-    ```bash
-    git clone <repo_url>
-    cd pistream
-    ```
-
-2.  **Setup Environment**:
-    ```bash
-    uv venv
+1.  **Clone the reposi**Options:**
+*   `--headless`: Run without a GUI window (useful for cloud/headless servers).
+*   `--model`: Specify a different YOLO model (default: `yolo11n.pt`).v
     source .venv/bin/activate
     uv pip install -r requirements.txt
     ```
+
+## Configuration
+
+Create a `.env` file in the project directory with the following variables:
+
+```env
+PORT=5555
+PI_IP=<IP_ADDRESS_OF_PI>
+# Optional
+MODEL=yolo11n.pt
+HEADLESS=False
+MOCK_SOURCE=0
+```
 
 ## Usage
 
 ### 1. Start the Streamer (Edge)
 
 **On the Raspberry Pi:**
-Transfer `pi_stream.py` and `requirements-pi.txt` to the Pi.
+Transfer `pi_stream.py`, `requirements-pi.txt`, and your `.env` file to the Pi.
 
 Install dependencies:
 ```bash
@@ -55,29 +62,23 @@ pip install -r requirements-pi.txt
 
 Run the streamer:
 ```bash
-python3 pi_stream.py --port 5555
+python3 pi_stream.py
 ```
 
 **Local Testing (Mock):**
-To simulate a stream from your webcam:
+To simulate a stream (configure source in `.env`):
 ```bash
-python3 mock_stream.py --source 0
-```
-To simulate with noise (no camera needed):
-```bash
-python3 mock_stream.py --source noise
+python3 mock_stream.py
 ```
 
 ### 2. Start the Inference Server
 
 **On your Server/Mac:**
-```bash
-python3 server_inference.py --host <PI_IP_OR_LOCALHOST> --port 5555
-```
+Ensure your `.env` file has the correct `PI_IP`.
 
-**Options:**
-*   `--headless`: Run without a GUI window (useful for cloud/headless servers).
-*   `--model`: Specify a different YOLO model (default: `yolov8n.pt`).
+```bash
+python3 server_inference.py
+```
 
 ## Development
 

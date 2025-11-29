@@ -1,8 +1,21 @@
 import time
 import zmq
 import socket
-import argparse
 import sys
+import os
+import logging
+import io
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Try importing Picamera2
 try:
@@ -10,7 +23,7 @@ try:
     from picamera2.encoders import JpegEncoder
     from picamera2.outputs import FileOutput
 except ImportError:
-    print("Error: picamera2 module not found. This script is intended for Raspberry Pi with libcamera.")
+    logger.error("picamera2 module not found. This script is intended for Raspberry Pi with libcamera.")
     sys.exit(1)
 
 def get_ip_address():
@@ -25,8 +38,6 @@ def get_ip_address():
         s.close()
     return IP
 
-import io
-
 # A custom output that sends data via ZMQ
 class ZmqOutput(io.BufferedIOBase):
     def __init__(self, socket):
@@ -39,49 +50,59 @@ class ZmqOutput(io.BufferedIOBase):
         return len(buf)
 
 def main():
-    parser = argparse.ArgumentParser(description='Pi Streamer (Picamera2 + ZMQ)')
-    parser.add_argument('--port', type=int, default=5555, help='Port to bind to')
-    args = parser.parse_args()
+    # Get configuration from environment variables
+    port = int(os.getenv('PORT', 5555))
+    
+    logger.info(f"Initializing Pi Streamer on port {port}...")
 
     # Initialize ZMQ
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind(f"tcp://*:{args.port}")
+    try:
+        context = zmq.Context()
+        socket = context.socket(zmq.PUB)
+        socket.bind(f"tcp://*:{port}")
+    except Exception as e:
+        logger.error(f"Failed to bind ZMQ socket: {e}")
+        sys.exit(1)
     
     ip = get_ip_address()
-    print(f"Streamer started at tcp://{ip}:{args.port}")
+    logger.info(f"Streamer started at tcp://{ip}:{port}")
 
     # Initialize Picamera2
-    picam2 = Picamera2()
-
-    # Configure the camera
-    # Low resolution and framerate for Pi Zero W
-    video_config = picam2.create_video_configuration(
-        main={"size": (640, 480)},
-        lores={"size": (640, 480)},
-        controls={"FrameRate": 15}
-    )
-    picam2.configure(video_config)
-
-    # Create our ZMQ output wrapper
-    zmq_output = ZmqOutput(socket)
-
-    # Start recording using JpegEncoder
-    # This uses the hardware JPEG encoder (if available) or optimized software encoder
-    picam2.start_recording(JpegEncoder(), FileOutput(zmq_output))
-
-    print("Streaming...")
-
     try:
+        picam2 = Picamera2()
+
+        # Configure the camera
+        # Low resolution and framerate for Pi Zero W
+        video_config = picam2.create_video_configuration(
+            main={"size": (640, 480)},
+            lores={"size": (640, 480)},
+            controls={"FrameRate": 15}
+        )
+        picam2.configure(video_config)
+        
+        # Create our ZMQ output wrapper
+        zmq_output = ZmqOutput(socket)
+
+        # Start recording using JpegEncoder
+        picam2.start_recording(JpegEncoder(), FileOutput(zmq_output))
+        logger.info("Camera recording started. Streaming data...")
+
         while True:
             time.sleep(1)
+
     except KeyboardInterrupt:
-        print("Stopping...")
+        logger.info("Stopping streamer...")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
     finally:
-        picam2.stop_recording()
-        picam2.close()
+        try:
+            picam2.stop_recording()
+            picam2.close()
+        except Exception:
+            pass
         socket.close()
         context.term()
+        logger.info("Cleaned up resources.")
 
 if __name__ == "__main__":
     main()
