@@ -1,10 +1,10 @@
 import cv2
 import zmq
 import numpy as np
-from ultralytics import YOLO
 import os
 import logging
 from dotenv import load_dotenv
+from vision_processor import VisionProcessor
 
 # Load environment variables
 load_dotenv()
@@ -16,76 +16,93 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
-    # Get configuration from environment variables
-    host = os.getenv('PI_IP', 'localhost')
-    port = int(os.getenv('PORT', 5555))
-    model_name = os.getenv('MODEL', 'yolo11n.pt')
-    headless = os.getenv('HEADLESS', 'False').lower() == 'true'
+def get_config():
+    """Retrieve configuration from environment variables."""
+    return {
+        'host': os.getenv('PI_IP', 'localhost'),
+        'port': int(os.getenv('PORT', 5555)),
+        'model_name': os.getenv('MODEL', 'yolo11n.pt'),
+        'task': os.getenv('TASK', 'detect'),
+        'headless': os.getenv('HEADLESS', 'False').lower() == 'true'
+    }
 
-    logger.info(f"Connecting to streamer at tcp://{host}:{port}")
-    logger.info(f"Using model: {model_name}")
-    logger.info(f"Headless mode: {headless}")
-
-    # Initialize YOLO model
-    try:
-        model = YOLO(model_name)
-    except Exception as e:
-        logger.error(f"Failed to load model {model_name}: {e}")
-        return
-
-    # Initialize ZMQ subscriber
+def initialize_zmq(host, port):
+    """Initialize and connect the ZMQ subscriber socket."""
     try:
         context = zmq.Context()
         socket = context.socket(zmq.SUB)
         socket.connect(f"tcp://{host}:{port}")
         socket.setsockopt_string(zmq.SUBSCRIBE, '')
-        logger.info("ZMQ socket connected.")
+        logger.info(f"ZMQ socket connected to tcp://{host}:{port}")
+        return context, socket
     except Exception as e:
         logger.error(f"Failed to connect ZMQ socket: {e}")
-        return
+        raise
 
+def receive_frame(socket):
+    """Receive and decode a frame from the ZMQ socket."""
+    try:
+        buffer = socket.recv()
+        np_arr = np.frombuffer(buffer, dtype=np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        return frame
+    except zmq.ZMQError as e:
+        logger.error(f"ZMQ receive error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Frame decoding error: {e}")
+        return None
+
+def process_stream(socket, processor, headless):
+    """Main loop to receive, process, and display frames."""
     try:
         while True:
-            # Receive frame data
-            try:
-                buffer = socket.recv()
-            except zmq.ZMQError as e:
-                logger.error(f"ZMQ receive error: {e}")
-                break
+            frame = receive_frame(socket)
             
-            # Decode image
-            np_arr = np.frombuffer(buffer, dtype=np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
             if frame is None:
-                logger.warning("Received empty frame")
+                logger.warning("Received empty or invalid frame, skipping...")
                 continue
 
-            # Run inference
-            results = model.track(frame, persist=True, verbose=False)
+            # Process frame
+            results, annotated_frame = processor.process_frame(frame)
 
-            # Visualize results
-            annotated_frame = results[0].plot()
-
-            if headless:
-                # Just log that we processed a frame
-                # logger.info(f"Processed frame with {len(results[0].boxes)} detections")
-                pass # Reduce log spam
-            else:
-                # Display
-                cv2.imshow("YOLOv8 Inference", annotated_frame)
+            if not headless:
+                cv2.imshow("YOLO Inference", annotated_frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
     except KeyboardInterrupt:
         logger.info("Stopping inference server...")
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+        logger.error(f"An unexpected error occurred in stream loop: {e}")
+    finally:
+        if not headless:
+            cv2.destroyAllWindows()
+
+def main():
+    config = get_config()
+    
+    logger.info(f"Starting Server Inference with config: {config}")
+
+    # Initialize Vision Processor
+    try:
+        processor = VisionProcessor(model_name=config['model_name'], task=config['task'])
+    except Exception:
+        logger.error("Failed to initialize VisionProcessor. Exiting.")
+        return
+
+    # Initialize ZMQ
+    try:
+        context, socket = initialize_zmq(config['host'], config['port'])
+    except Exception:
+        return
+
+    # Run Main Loop
+    try:
+        process_stream(socket, processor, config['headless'])
     finally:
         socket.close()
         context.term()
-        cv2.destroyAllWindows()
         logger.info("Cleaned up resources.")
 
 if __name__ == "__main__":

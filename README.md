@@ -41,7 +41,10 @@ Create a `.env` file in the project directory with the following variables:
 ```env
 PORT=5555
 PI_IP=<IP_ADDRESS_OF_PI>
-# Optional
+# Optional Configuration
+# Task: detect, segment, pose, classify, track
+TASK=detect
+# Model: yolo11n.pt, yolo11n-seg.pt, yolo11n-pose.pt, yolo11n-cls.pt
 MODEL=yolo11n.pt
 HEADLESS=False
 MOCK_SOURCE=0
@@ -79,10 +82,23 @@ Ensure your `.env` file has the correct `PI_IP`.
 ```bash
 python3 server_inference.py
 ```
+*   `--model`: Specify a different YOLO model (default: `yolo11n.pt`).
+
+## Supported Tasks
+
+You can switch between different computer vision tasks by setting the `TASK` variable in your `.env` file.
+
+| Task | Description | Recommended Model |
+| :--- | :--- | :--- |
+| `detect` | Object Detection (Bounding Boxes) | `yolo11n.pt` |
+| `segment` | Instance Segmentation (Masks) | `yolo11n-seg.pt` |
+| `pose` | Pose Estimation (Keypoints) | `yolo11n-pose.pt` |
+| `classify` | Image Classification | `yolo11n-cls.pt` |
+| `track` | Object Tracking (ID persistence) | `yolo11n.pt` (or seg/pose) |
 
 ## Development
 
-*   **Requirements**: `ultralytics`, `opencv-python`, `zmq`, `imutils`, `lapx`.
+*   **Requirements**: `ultralytics`, `opencv-python`, `zmq`, `imutils`, `lapx`, `python-dotenv`.
 *   **Protocol**: ZMQ PUB/SUB pattern. Frames are JPEG encoded.
 
 ## Troubleshooting
