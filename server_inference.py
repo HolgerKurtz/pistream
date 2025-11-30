@@ -64,6 +64,9 @@ def process_stream(socket, processor, music_generator, headless):
                 logger.warning("Received empty or invalid frame, skipping...")
                 continue
 
+            # Mirror frame (horizontal flip)
+            frame = cv2.flip(frame, 1)
+
             # Process frame
             results, annotated_frame = processor.process_frame(frame)
 
