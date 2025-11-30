@@ -24,22 +24,15 @@ class MusicGenerator:
         self.scale_midi = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84, 86, 88, 91, 93, 96]
         
         # Durations (decay factors)
-        # Higher decay factor = shorter sound. Lower = longer.
-        # Let's map 0.0-1.0 to a set of decay factors.
-        # 0.0 (Top) -> Long sustain (low decay)
-        # 1.0 (Bottom) -> Short pluck (high decay)
         self.decay_factors = [1.0, 3.0, 5.0, 8.0, 15.0] 
-        # Corresponding to roughly: 
-        # 1.0 -> ~1-2s audible
-        # 15.0 -> ~0.2s audible
         
         # Sound banks: [decay_index][note] -> Sound
         self.sound_banks = []
         self._generate_sounds()
         
     def _generate_sounds(self):
-        """Generate sine wave sounds for each note in the scale for multiple durations."""
-        logger.info("Generating synthesized sounds...")
+        """Generate rich synthesized sounds (additive synthesis) for each note."""
+        logger.info("Generating synthesized sounds with harmonics...")
         sample_rate = 44100
         max_duration = 2.0  # seconds buffer size
         
@@ -49,11 +42,27 @@ class MusicGenerator:
         for decay in self.decay_factors:
             bank = {}
             for note in self.scale_midi:
-                # Calculate frequency
-                frequency = 440.0 * (2.0 ** ((note - 69.0) / 12.0))
+                # Fundamental frequency
+                f0 = 440.0 * (2.0 ** ((note - 69.0) / 12.0))
                 
-                # Generate sine wave
-                wave = np.sin(2 * np.pi * frequency * t)
+                # Additive Synthesis: Fundamental + Harmonics
+                # Amplitudes for harmonics (1st, 2nd, 3rd, etc.)
+                # This creates a more "piano/organ" like timbre
+                harmonics = [
+                    (1.0, 1.0),   # Fundamental
+                    (2.0, 0.5),   # 2nd harmonic (octave)
+                    (3.0, 0.25),  # 3rd harmonic (fifth)
+                    (4.0, 0.125), # 4th harmonic
+                    (5.0, 0.06)   # 5th harmonic
+                ]
+                
+                wave = np.zeros_like(t)
+                
+                for mult, amp in harmonics:
+                    wave += amp * np.sin(2 * np.pi * (f0 * mult) * t)
+                
+                # Normalize wave before envelope
+                wave = wave / np.max(np.abs(wave))
                 
                 # Apply envelope (decay)
                 envelope = np.exp(-decay * t)
@@ -81,21 +90,16 @@ class MusicGenerator:
 
     def _map_y_to_duration_index(self, y_norm):
         """Map normalized Y coordinate to a duration index."""
-        # y_norm 0 (top) -> Long (index 0)
-        # y_norm 1 (bottom) -> Short (index -1)
-        # Let's map 0->0 (Long) and 1->Last (Short)
-        
         val = y_norm # 0 is top
         val = max(0.0, min(1.0, val))
-        
         idx = int(val * (len(self.decay_factors) - 1))
         return idx
 
     def process_pose(self, keypoints):
         """
         Process pose keypoints.
-        Right Hand: Pitch (triggers note).
-        Left Hand: Duration (selects bank).
+        Left Hand: Pitch (triggers note).
+        Right Hand: Duration (selects bank).
         """
         if not pygame.mixer.get_init():
             return
