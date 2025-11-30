@@ -6,3 +6,4 @@ zmq
 pyzmq
 lapx
 python-dotenv
+pygame

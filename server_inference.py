@@ -5,6 +5,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from vision_processor import VisionProcessor
+from music_generator import MusicGenerator
 
 # Load environment variables
 load_dotenv()
@@ -53,7 +54,7 @@ def receive_frame(socket):
         logger.error(f"Frame decoding error: {e}")
         return None
 
-def process_stream(socket, processor, headless):
+def process_stream(socket, processor, music_generator, headless):
     """Main loop to receive, process, and display frames."""
     try:
         while True:
@@ -65,6 +66,10 @@ def process_stream(socket, processor, headless):
 
             # Process frame
             results, annotated_frame = processor.process_frame(frame)
+
+            # Generate Music
+            if music_generator and results and hasattr(results, 'keypoints'):
+                music_generator.process_pose(results.keypoints)
 
             if not headless:
                 cv2.imshow("YOLO Inference", annotated_frame)
@@ -97,10 +102,20 @@ def main():
     except Exception:
         return
 
+    # Initialize Music Generator
+    music_generator = None
+    if config['task'] == 'pose':
+        try:
+            music_generator = MusicGenerator()
+        except Exception as e:
+            logger.error(f"Failed to initialize MusicGenerator: {e}")
+
     # Run Main Loop
     try:
-        process_stream(socket, processor, config['headless'])
+        process_stream(socket, processor, music_generator, config['headless'])
     finally:
+        if music_generator:
+            music_generator.close()
         socket.close()
         context.term()
         logger.info("Cleaned up resources.")
