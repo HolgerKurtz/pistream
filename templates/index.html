@@ -198,6 +198,60 @@
       cursor: pointer;
     }
 
+    /* ── Control row (label + pill) ── */
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .control-label {
+      font-size: 0.8rem;
+      color: #c9d1d9;
+    }
+
+    /* ── Pill toggle ── */
+    .pill-toggle {
+      position: relative;
+      display: flex;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      padding: 2px;
+      cursor: pointer;
+      user-select: none;
+      width: 150px;
+    }
+
+    .pill-option {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      text-align: center;
+      padding: 4px 0;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #8b949e;
+      border-radius: 18px;
+      transition: color 0.2s;
+    }
+
+    .pill-option.active {
+      color: #f0f6fc;
+    }
+
+    .pill-thumb {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      width: calc(50% - 2px);
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 18px;
+      transition: left 0.2s ease;
+      left: 2px;
+    }
+
     /* ── Info box ── */
     .info-box {
       background: #0d1117;
@@ -293,7 +347,15 @@
   <div class="section">
     <div class="section-label">Control</div>
     <button id="toggle-btn" onclick="toggleTracking()">Pause Tracking</button>
-    <button id="flip-btn" onclick="toggleFlip()" style="margin-top:8px">Mirror: On</button>
+
+    <div class="control-row" style="margin-top:14px">
+      <span class="control-label">Camera</span>
+      <div class="pill-toggle" id="camera-toggle" onclick="toggleFlip()">
+        <div class="pill-option" id="pill-webcam">Webcam</div>
+        <div class="pill-option" id="pill-iphone">iPhone</div>
+        <div class="pill-thumb" id="pill-thumb"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Sliders -->
@@ -425,7 +487,7 @@
 
     if (typeof d.flip_horizontal !== 'undefined' && d.flip_horizontal !== flipped) {
       flipped = d.flip_horizontal;
-      updateFlipBtn();
+      updateCameraToggle();
     }
   };
 
@@ -462,17 +524,27 @@
     }
   }
 
-  // ── Flip ─────────────────────────────────────────────────────────────────
+  // ── Camera toggle (pill) ────────────────────────────────────────────────
   function toggleFlip() {
     flipped = !flipped;
     post({ flip_horizontal: flipped });
-    updateFlipBtn();
+    updateCameraToggle();
   }
 
-  function updateFlipBtn() {
-    const btn = document.getElementById('flip-btn');
-    btn.textContent = flipped ? 'Mirror: On' : 'Mirror: Off';
-    btn.classList.toggle('paused', !flipped);
+  function updateCameraToggle() {
+    // flipped=true → Webcam (left), flipped=false → iPhone (right)
+    const thumb   = document.getElementById('pill-thumb');
+    const webcam  = document.getElementById('pill-webcam');
+    const iphone  = document.getElementById('pill-iphone');
+    if (flipped) {
+      thumb.style.left = '2px';
+      webcam.classList.add('active');
+      iphone.classList.remove('active');
+    } else {
+      thumb.style.left = 'calc(50%)';
+      iphone.classList.add('active');
+      webcam.classList.remove('active');
+    }
   }
 
   // ── Sliders ───────────────────────────────────────────────────────────────
@@ -491,6 +563,9 @@
       sliderDirty[sliderId] = false;
     }, 250);
   }
+
+  // Set initial toggle appearance after all functions are defined
+  updateCameraToggle();
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function post(body) {
