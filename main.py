@@ -1,5 +1,6 @@
 import cv2
 import logging
+import os
 import threading
 import time
 import webbrowser
@@ -19,13 +20,22 @@ logger = logging.getLogger(__name__)
 
 def _detect_cameras() -> list:
     cameras = []
-    for i in range(5):
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cameras.append({'index': i, 'label': f'Camera {i}  ({w}×{h})'})
-            cap.release()
+    # Suppress OpenCV's "out of bound" stderr messages while probing
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    saved_stderr = os.dup(2)
+    os.dup2(devnull_fd, 2)
+    try:
+        for i in range(5):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cameras.append({'index': i, 'label': f'Camera {i}  ({w}×{h})'})
+                cap.release()
+    finally:
+        os.dup2(saved_stderr, 2)
+        os.close(saved_stderr)
+        os.close(devnull_fd)
     return cameras
 
 

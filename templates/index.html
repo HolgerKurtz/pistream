@@ -581,6 +581,12 @@
         sel.appendChild(opt);
       });
 
+      // If only one camera, auto-pick it and skip the overlay
+      if (cameras.length === 1) {
+        pickCamera(cameras[0].index);
+        return;
+      }
+
       // Populate picker overlay
       const btns = document.getElementById('picker-buttons');
       while (btns.firstChild) btns.removeChild(btns.firstChild);
