@@ -1,91 +1,50 @@
-# PISTREAM — Bird Tracker
+# Bird Tracker
 
-A lightweight, split-architecture bird tracking system for the Raspberry Pi Zero W.
+A macOS app that tracks birds in the sky using your iPhone camera. Point the iPhone at the sky, launch the app, and watch birds get detected and traced in real time — in your browser.
 
-## Overview
+## How it works
 
-The Pi captures sky footage and streams it over the network. The server detects and tracks birds using background subtraction — no heavy ML model required. A browser-based UI provides a live view and real-time controls.
+The app uses background subtraction (OpenCV MOG2) to detect anything moving in the sky. Each moving blob gets a persistent ID and a colour trail showing its recent flight path. No machine learning, no cloud — runs entirely on your Mac.
 
+## Setup
+
+**Requirements:** macOS, [uv](https://docs.astral.sh/uv/)
+
+Install uv if you don't have it:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
-Raspberry Pi Zero W  ──ZMQ (JPEG)──▶  Server
-                                          │
-                                    BirdTracker
-                                   (OpenCV MOG2)
-                                          │
-                                    Browser UI
-                                  (live feed + controls)
-```
 
-## Installation
-
+Install dependencies (once):
 ```bash
 uv pip install -r requirements.txt
 ```
 
-Pi dependencies (`requirements-pi.txt`): `pyzmq`, `numpy`, `python-dotenv`. `picamera2` is pre-installed on Raspberry Pi OS.
+## Launch
 
-## Configuration
+Double-click **`start.command`** in Finder. The browser opens automatically.
 
-Create a `.env` file:
-
-```env
-PORT=5555
-PI_IP=localhost        # IP of the Pi when running on real hardware
-MOCK_SOURCE=0          # 0 = webcam, path = video file, "noise" = random frames
-WEB_PORT=5001
-
-# Bird tracker tuning (adjustable live in the browser UI)
-BG_HISTORY=500
-BG_VAR_THRESHOLD=16
-BIRD_MIN_AREA=20
-BIRD_MAX_AREA=2000
-TRAIL_LENGTH=60
-MAX_DISAPPEARED=10
-WARMUP_FRAMES=60
-MIN_TRACK_AGE=4
-```
-
-## Usage
-
-### Local development (Mac / Linux)
-
-Open two terminals:
-
+Or from the terminal:
 ```bash
-# Terminal 1 — mock video stream from webcam
-uv run python3 mock_stream.py
-
-# Terminal 2 — bird tracker + web UI
 uv run python3 main.py
 ```
 
-Open `http://localhost:5001` in a browser.
+## iPhone camera
 
-### On Raspberry Pi
+Enable **Continuity Camera** (iPhone and Mac on the same Apple ID, Bluetooth on). The iPhone appears as a camera device. On a MacBook with a built-in FaceTime camera, the iPhone is usually device index 1 — set it in `.env`:
 
-Transfer `pi_stream.py`, `requirements-pi.txt`, and `.env` to the Pi, then:
-
-```bash
-pip install -r requirements-pi.txt
-python3 pi_stream.py
+```env
+CAMERA_INDEX=1
 ```
-
-Set `PI_IP` in `.env` to the Pi's IP address and run `main.py` on the server.
 
 ## Tuning
 
-| Parameter | Effect |
-|---|---|
-| `BG_VAR_THRESHOLD` | Lower = more sensitive. Increase to ignore wind-blown leaves. |
-| `BIRD_MIN_AREA` | Raise to filter out insects or noise. |
-| `BIRD_MAX_AREA` | Lower to ignore large moving objects (clouds, trees). |
-| `MIN_TRACK_AGE` | Frames a blob must persist before it's drawn. Raise to reduce false positives. |
-| `WARMUP_FRAMES` | Frames spent learning the initial background. MOG2 won't detect anything during this window. |
+Open the sidebar in the browser. Key controls:
 
-All parameters except `WARMUP_FRAMES` can be adjusted live in the browser sidebar without restarting.
+| Slider | What it does |
+|--------|-------------|
+| Motion threshold | MOG2 sensitivity — lower catches subtler movement, higher ignores wind/leaves |
+| Min / Max blob size | Filter by pixel area — use "Blobs this frame" readout to calibrate |
+| Min track age | Frames a blob must persist before it's shown — raise to suppress rain/flickers |
 
-## Troubleshooting
-
-**"hundreds of birds" on startup** — increase `WARMUP_FRAMES` or `MIN_TRACK_AGE`.
-
-**Pi Zero: "picam2 module not found"** — run `sudo raspi-config` → Performance Options → GPU Memory → set to 128, then reboot.
+Watch **Blobs this frame** while adjusting to see what the tracker currently detects.

@@ -60,6 +60,3 @@ main.py              ← entry point; opens camera, wires everything, serves UI
 6. Only tracks with age ≥ `MIN_TRACK_AGE` are shown (suppresses startup noise)
 7. Annotated greyscale-to-BGR frame with fading coloured trails
 
-## Future: p5.js Visualisation
-
-Plan: add a WebSocket broadcast of `AppState.get_stats()` track positions each frame. A p5.js client connects and draws flight paths with creative stroke styles. The camera layer stays unchanged.
