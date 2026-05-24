@@ -41,7 +41,10 @@ def run(
         if new_idx is not None:
             logger.info(f"Switching to camera {new_idx}")
             cap.release()
+            time.sleep(0.5)  # give AVFoundation time to release the device
             cap = cv2.VideoCapture(new_idx)
+            if not cap.isOpened():
+                logger.error(f"Failed to open camera {new_idx}")
             tracker.reset()
 
         t0 = time.perf_counter()

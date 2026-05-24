@@ -16,6 +16,72 @@
       overflow: hidden;
     }
 
+    /* ── Camera picker overlay ── */
+    #camera-picker {
+      position: fixed;
+      inset: 0;
+      background: rgba(1,4,9,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+
+    #camera-picker.hidden { display: none; }
+
+    .picker-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 380px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .picker-card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      margin-bottom: 6px;
+    }
+
+    .picker-card p {
+      font-size: 0.82rem;
+      color: #8b949e;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .camera-btn {
+      display: block;
+      width: 100%;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #c9d1d9;
+      font-size: 0.875rem;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .camera-btn:hover {
+      background: #21262d;
+      border-color: #58a6ff;
+      color: #f0f6fc;
+    }
+
+    .camera-btn .cam-index {
+      font-size: 0.7rem;
+      color: #484f58;
+      display: block;
+      margin-top: 2px;
+    }
+
     /* ── Video panel ── */
     #video-panel {
       flex: 1;
@@ -319,6 +385,17 @@
 </head>
 <body>
 
+<div id="camera-picker">
+  <div class="picker-card">
+    <h2>Choose your camera</h2>
+    <p>Select the camera to use for bird tracking.<br>
+       The iPhone camera typically gives the best image.</p>
+    <div id="picker-buttons">
+      <div class="camera-btn" style="color:#484f58">Detecting cameras…</div>
+    </div>
+  </div>
+</div>
+
 <div id="video-panel">
   <img id="feed" src="/video_feed" alt="live feed"
        onerror="this.style.display='none'; document.getElementById('no-signal').style.display='block'">
@@ -486,10 +563,15 @@
   };
 
   // ── Camera list ───────────────────────────────────────────────────────────
+  let cameraSelectDirty = false;
+  let cameraSelectTimer = null;
+
   async function loadCameras() {
     try {
       const res = await fetch('/cameras');
       const cameras = await res.json();
+
+      // Populate sidebar dropdown
       const sel = document.getElementById('camera-select');
       while (sel.firstChild) sel.removeChild(sel.firstChild);
       cameras.forEach(c => {
@@ -498,10 +580,36 @@
         opt.textContent = c.label;
         sel.appendChild(opt);
       });
+
+      // Populate picker overlay
+      const btns = document.getElementById('picker-buttons');
+      while (btns.firstChild) btns.removeChild(btns.firstChild);
+      cameras.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'camera-btn';
+        const name = document.createElement('span');
+        name.textContent = c.label;
+        const hint = document.createElement('span');
+        hint.className = 'cam-index';
+        hint.textContent = c.index === 0 ? 'Built-in camera' : 'External / iPhone';
+        btn.appendChild(name);
+        btn.appendChild(hint);
+        btn.addEventListener('click', () => pickCamera(c.index));
+        btns.appendChild(btn);
+      });
     } catch (_) {}
   }
 
+  function pickCamera(idx) {
+    post({ camera_index: idx });
+    document.getElementById('camera-select').value = String(idx);
+    document.getElementById('camera-picker').classList.add('hidden');
+  }
+
   function switchCamera(idx) {
+    cameraSelectDirty = true;
+    clearTimeout(cameraSelectTimer);
+    cameraSelectTimer = setTimeout(() => { cameraSelectDirty = false; }, 3000);
     post({ camera_index: idx });
   }
 
@@ -537,7 +645,7 @@
       updateFlipToggle();
     }
 
-    if (typeof d.camera_index !== 'undefined') {
+    if (!cameraSelectDirty && typeof d.camera_index !== 'undefined') {
       const sel = document.getElementById('camera-select');
       if (sel && sel.value !== String(d.camera_index)) {
         sel.value = String(d.camera_index);
