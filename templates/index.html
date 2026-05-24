@@ -252,6 +252,21 @@
       left: 2px;
     }
 
+    /* ── Camera select ── */
+    #camera-select {
+      width: 100%;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    #camera-select:focus { border-color: #58a6ff; }
+
     /* ── Info box ── */
     .info-box {
       background: #0d1117;
@@ -348,11 +363,20 @@
     <div class="section-label">Control</div>
     <button id="toggle-btn" onclick="toggleTracking()">Pause Tracking</button>
 
-    <div class="control-row" style="margin-top:14px">
-      <span class="control-label">Camera</span>
-      <div class="pill-toggle" id="camera-toggle" onclick="toggleFlip()">
-        <div class="pill-option" id="pill-webcam">Webcam</div>
-        <div class="pill-option" id="pill-iphone">iPhone</div>
+    <div class="slider-row" style="margin-top:14px">
+      <div class="slider-header" style="margin-bottom:6px">
+        <span class="slider-name">Camera</span>
+      </div>
+      <select id="camera-select" onchange="switchCamera(+this.value)">
+        <option value="">Detecting cameras…</option>
+      </select>
+    </div>
+
+    <div class="control-row" style="margin-top:12px">
+      <span class="control-label">Image</span>
+      <div class="pill-toggle" id="flip-toggle" onclick="toggleFlip()">
+        <div class="pill-option" id="pill-normal">Normal</div>
+        <div class="pill-option" id="pill-mirror">Mirror</div>
         <div class="pill-thumb" id="pill-thumb"></div>
       </div>
     </div>
@@ -450,8 +474,8 @@
 
 <script>
   let tracking = true;
-  let flipped = true;
-  let sliderDirty = {};    // prevent SSE from overwriting a slider the user is touching
+  let flipped = false;
+  let sliderDirty = {};
   let debounceTimers = {};
 
   const SLIDER_FMT = {
@@ -461,7 +485,27 @@
     'min-age':   v => v + ' f',
   };
 
-  // ── SSE ──────────────────────────────────────────────────────────────────
+  // ── Camera list ───────────────────────────────────────────────────────────
+  async function loadCameras() {
+    try {
+      const res = await fetch('/cameras');
+      const cameras = await res.json();
+      const sel = document.getElementById('camera-select');
+      while (sel.firstChild) sel.removeChild(sel.firstChild);
+      cameras.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = String(c.index);
+        opt.textContent = c.label;
+        sel.appendChild(opt);
+      });
+    } catch (_) {}
+  }
+
+  function switchCamera(idx) {
+    post({ camera_index: idx });
+  }
+
+  // ── SSE ───────────────────────────────────────────────────────────────────
   const src = new EventSource('/stats');
 
   src.onmessage = (e) => {
@@ -470,7 +514,6 @@
     document.getElementById('active-count').textContent = d.active_tracks;
     document.getElementById('fps-val').textContent = d.fps;
 
-    // Sync sliders only if user isn't actively touching them
     syncSlider('thresh',    'thresh-val',    d.bg_var_threshold, v => v.toFixed(1));
     syncSlider('min-area',  'min-area-val',  d.min_area,         v => v + ' px²');
     syncSlider('max-area',  'max-area-val',  d.max_area,         v => v + ' px²');
@@ -479,20 +522,26 @@
     const areaEl = document.getElementById('area-range');
     if (d.blob_area_min !== null) {
       areaEl.textContent = d.blob_area_min === d.blob_area_max
-        ? `${d.blob_area_min} px²`
-        : `${d.blob_area_min}–${d.blob_area_max} px²`;
+        ? d.blob_area_min + ' px²'
+        : d.blob_area_min + '–' + d.blob_area_max + ' px²';
       areaEl.style.color = '#c9d1d9';
     } else {
       areaEl.textContent = 'none detected';
       areaEl.style.color = '#484f58';
     }
 
-    const warmupRow = document.getElementById('warmup-row');
-    warmupRow.style.display = d.warming_up ? 'flex' : 'none';
+    document.getElementById('warmup-row').style.display = d.warming_up ? 'flex' : 'none';
 
     if (typeof d.flip_horizontal !== 'undefined' && d.flip_horizontal !== flipped) {
       flipped = d.flip_horizontal;
-      updateCameraToggle();
+      updateFlipToggle();
+    }
+
+    if (typeof d.camera_index !== 'undefined') {
+      const sel = document.getElementById('camera-select');
+      if (sel && sel.value !== String(d.camera_index)) {
+        sel.value = String(d.camera_index);
+      }
     }
   };
 
@@ -512,9 +561,9 @@
     tracking = !tracking;
     post({ tracking });
 
-    const btn  = document.getElementById('toggle-btn');
-    const dot  = document.getElementById('status-dot');
-    const txt  = document.getElementById('status-text');
+    const btn = document.getElementById('toggle-btn');
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
 
     if (tracking) {
       btn.textContent = 'Pause Tracking';
@@ -529,26 +578,25 @@
     }
   }
 
-  // ── Camera toggle (pill) ────────────────────────────────────────────────
+  // ── Image flip toggle ─────────────────────────────────────────────────────
   function toggleFlip() {
     flipped = !flipped;
     post({ flip_horizontal: flipped });
-    updateCameraToggle();
+    updateFlipToggle();
   }
 
-  function updateCameraToggle() {
-    // flipped=true → Webcam (left), flipped=false → iPhone (right)
-    const thumb   = document.getElementById('pill-thumb');
-    const webcam  = document.getElementById('pill-webcam');
-    const iphone  = document.getElementById('pill-iphone');
+  function updateFlipToggle() {
+    const thumb  = document.getElementById('pill-thumb');
+    const normal = document.getElementById('pill-normal');
+    const mirror = document.getElementById('pill-mirror');
     if (flipped) {
-      thumb.style.left = '2px';
-      webcam.classList.add('active');
-      iphone.classList.remove('active');
-    } else {
       thumb.style.left = 'calc(50%)';
-      iphone.classList.add('active');
-      webcam.classList.remove('active');
+      mirror.classList.add('active');
+      normal.classList.remove('active');
+    } else {
+      thumb.style.left = '2px';
+      normal.classList.add('active');
+      mirror.classList.remove('active');
     }
   }
 
@@ -556,12 +604,10 @@
   function onSlider(sliderId, param, value) {
     sliderDirty[sliderId] = true;
 
-    // Update label immediately using the per-slider format function
     const labelId = sliderId + '-val';
     const el = document.getElementById(labelId);
     if (el) el.textContent = (SLIDER_FMT[sliderId] || (v => v))(value);
 
-    // Debounce the POST so we don't flood the server while dragging
     clearTimeout(debounceTimers[sliderId]);
     debounceTimers[sliderId] = setTimeout(() => {
       post({ [param]: value });
@@ -569,8 +615,9 @@
     }, 250);
   }
 
-  // Set initial toggle appearance after all functions are defined
-  updateCameraToggle();
+  // ── Init ──────────────────────────────────────────────────────────────────
+  updateFlipToggle();
+  loadCameras();
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function post(body) {

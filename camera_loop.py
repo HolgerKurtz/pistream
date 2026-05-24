@@ -37,6 +37,13 @@ def run(
     t_capture = t_track = t_encode = 0.0
 
     while not stop_event.is_set():
+        new_idx = state.pop_camera_changed()
+        if new_idx is not None:
+            logger.info(f"Switching to camera {new_idx}")
+            cap.release()
+            cap = cv2.VideoCapture(new_idx)
+            tracker.reset()
+
         t0 = time.perf_counter()
         ret, frame = cap.read()
         t1 = time.perf_counter()

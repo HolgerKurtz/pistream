@@ -1,3 +1,4 @@
+import cv2
 import logging
 import threading
 import time
@@ -16,9 +17,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _detect_cameras() -> list:
+    cameras = []
+    for i in range(5):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cameras.append({'index': i, 'label': f'Camera {i}  ({w}×{h})'})
+            cap.release()
+    return cameras
+
+
 def main() -> None:
     config = get_config()
-    logger.info(f"Config: {config}")
+
+    logger.info("Detecting cameras…")
+    camera_list = _detect_cameras()
+    if not camera_list:
+        logger.error("No cameras found.")
+        return
+    logger.info(f"Found cameras: {[c['label'] for c in camera_list]}")
+
+    # Use configured index if available, otherwise first detected camera
+    available_indices = [c['index'] for c in camera_list]
+    default_index = config['camera_index'] if config['camera_index'] in available_indices else camera_list[0]['index']
 
     tracker = BirdTracker(
         bg_history=config['bg_history'],
@@ -32,12 +55,13 @@ def main() -> None:
     )
 
     try:
-        cap = camera_loop.initialize(config['camera_index'])
+        cap = camera_loop.initialize(default_index)
     except RuntimeError as e:
         logger.error(e)
         return
 
-    state = AppState(config)
+    config['camera_index'] = default_index
+    state = AppState(config, camera_list)
     web_app.init(state)
 
     stop_event = threading.Event()

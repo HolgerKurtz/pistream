@@ -1,4 +1,6 @@
 import json
+import os
+import sys
 import time
 import logging
 from flask import Flask, Response, render_template, request, jsonify
@@ -6,7 +8,10 @@ from state import AppState
 
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Resolve template folder so it works both in development and as a frozen .app bundle
+_here = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, template_folder=os.path.join(_here, 'templates'))
+
 _state: AppState
 
 
@@ -18,6 +23,11 @@ def init(state: AppState) -> None:
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/cameras')
+def cameras():
+    return jsonify(_state.get_camera_list())
 
 
 @app.route('/video_feed')
