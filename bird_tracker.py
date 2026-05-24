@@ -14,6 +14,7 @@ class BirdResults:
     boxes: List[Tuple[int, int, int, int]]       # list of (x, y, w, h)
     centroids: List[Tuple[int, int]]
     warming_up: bool                             # True during initial background learning
+    detection_areas: List[int]                  # pixel areas of all blobs that passed the size filter
 
 
 class BirdTracker:
@@ -76,16 +77,18 @@ class BirdTracker:
 
         centroids: List[Tuple[int, int]] = []
         boxes: List[Tuple[int, int, int, int]] = []
+        areas: List[int] = []
 
         if not warming_up:
             contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             for cnt in contours:
-                area = cv2.contourArea(cnt)
+                area = int(cv2.contourArea(cnt))
                 if not (self.min_area <= area <= self.max_area):
                     continue
                 x, y, w, h = cv2.boundingRect(cnt)
                 centroids.append((x + w // 2, y + h // 2))
                 boxes.append((x, y, w, h))
+                areas.append(area)
 
         self._update_tracks(centroids, boxes)
 
@@ -105,8 +108,18 @@ class BirdTracker:
             boxes=confirmed_boxes,
             centroids=centroids,
             warming_up=warming_up,
+            detection_areas=areas,
         )
         return results, annotated
+
+    def reset(self) -> None:
+        """Clear all tracks and restart IDs from 0. Called when tracking is paused."""
+        self._next_id = 0
+        self._tracks.clear()
+        self._disappeared.clear()
+        self._boxes.clear()
+        self._ages.clear()
+        logger.info("BirdTracker state reset.")
 
     # ------------------------------------------------------------------
     # Centroid tracker

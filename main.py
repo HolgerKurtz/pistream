@@ -38,9 +38,10 @@ def main() -> None:
     state = AppState(config)
     web_app.init(state)
 
+    stop_event = threading.Event()
     zmq_thread = threading.Thread(
         target=zmq_loop.run,
-        args=(socket, tracker, state),
+        args=(socket, tracker, state, stop_event),
         daemon=True,
     )
     zmq_thread.start()
@@ -56,6 +57,8 @@ def main() -> None:
     except KeyboardInterrupt:
         logger.info("Shutting down…")
     finally:
+        stop_event.set()
+        zmq_thread.join(timeout=2.0)
         socket.close()
         context.term()
         logger.info("Done.")

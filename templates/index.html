@@ -294,7 +294,7 @@
 
     <div class="slider-row">
       <div class="slider-header">
-        <span class="slider-name">Sensitivity</span>
+        <span class="slider-name">Motion threshold <span style="color:#484f58;font-size:0.7em">↑ less sensitive</span></span>
         <span class="slider-val" id="thresh-val">—</span>
       </div>
       <input type="range" id="thresh" min="1" max="50" step="0.5"
@@ -304,7 +304,7 @@
     <div class="slider-row">
       <div class="slider-header">
         <span class="slider-name">Min blob size</span>
-        <span class="slider-val" id="min-area-val">— px</span>
+        <span class="slider-val" id="min-area-val">— px²</span>
       </div>
       <input type="range" id="min-area" min="5" max="300" step="5"
              oninput="onSlider('min-area','min_area', +this.value)">
@@ -313,10 +313,14 @@
     <div class="slider-row">
       <div class="slider-header">
         <span class="slider-name">Max blob size</span>
-        <span class="slider-val" id="max-area-val">— px</span>
+        <span class="slider-val" id="max-area-val">— px²</span>
       </div>
       <input type="range" id="max-area" min="100" max="5000" step="50"
              oninput="onSlider('max-area','max_area', +this.value)">
+    </div>
+
+    <div class="area-hint" id="area-hint" style="margin:-4px 0 10px;font-size:0.72rem;color:#484f58">
+      Blobs this frame: <span id="area-range">none detected</span>
     </div>
 
     <div class="slider-row">
@@ -331,16 +335,39 @@
 
   <!-- Help -->
   <div class="section">
-    <div class="section-label">About the numbers</div>
+    <div class="section-label">How it works</div>
     <div class="info-box">
-      <strong>What do the IDs mean?</strong>
+      <strong>Track IDs &amp; trails</strong>
+      Each moving blob is assigned a number. That number follows the bird
+      until it disappears for too many frames — then it's dropped. The coloured
+      line is its recent path; older positions are dimmer. IDs reset to 0
+      when you pause tracking.
+
+      <strong style="margin-top:10px">Motion threshold</strong>
+      How much a pixel must change from the background before it counts as
+      movement. <em>Lower = more sensitive</em> — picks up subtle flickers,
+      but also wind and lighting changes. Raise it to ignore small variations
+      and only track clearly moving objects.
+
+      <strong style="margin-top:10px">Blob size (px²)</strong>
+      The video is 640 × 480 px. Size is measured in square pixels:
       <ul>
-        <li>Each detected bird is assigned a unique number.</li>
-        <li>The number stays with that bird as long as it's visible.</li>
-        <li>The coloured trail shows its recent flight path — older positions fade out.</li>
-        <li>If a bird disappears for more than a few frames it gets a new ID when it reappears.</li>
-        <li><b>Min track age</b> — a blob must appear for this many consecutive frames before it's shown. Higher = fewer false positives from leaves or noise.</li>
+        <li>Insect / speck of dust: ~5–15 px²</li>
+        <li>Small bird (sparrow, swallow): ~20–150 px²</li>
+        <li>Large bird (gull, heron): ~150–600 px²</li>
+        <li>Aeroplane / cloud edge: 1000+ px²</li>
       </ul>
+      Watch <em>Blobs this frame</em> above the sliders — it shows the live
+      range of what the tracker is seeing, so you can dial min/max to match.
+
+      <strong style="margin-top:10px">Min track age</strong>
+      A blob must appear for this many consecutive frames before it's drawn.
+      Increase it to filter out one-frame flashes (rain drops, lens flare).
+      Decrease it if real birds are disappearing too quickly.
+
+      <strong style="margin-top:10px">Calibrating background</strong>
+      On startup the tracker spends a few seconds learning what the static
+      sky looks like. Nothing is detected during this window — that's normal.
     </div>
   </div>
 
@@ -353,8 +380,8 @@
 
   const SLIDER_FMT = {
     'thresh':    v => (+v).toFixed(1),
-    'min-area':  v => v + ' px',
-    'max-area':  v => v + ' px',
+    'min-area':  v => v + ' px²',
+    'max-area':  v => v + ' px²',
     'min-age':   v => v + ' f',
   };
 
@@ -369,9 +396,20 @@
 
     // Sync sliders only if user isn't actively touching them
     syncSlider('thresh',    'thresh-val',    d.bg_var_threshold, v => v.toFixed(1));
-    syncSlider('min-area',  'min-area-val',  d.min_area,         v => v + ' px');
-    syncSlider('max-area',  'max-area-val',  d.max_area,         v => v + ' px');
+    syncSlider('min-area',  'min-area-val',  d.min_area,         v => v + ' px²');
+    syncSlider('max-area',  'max-area-val',  d.max_area,         v => v + ' px²');
     syncSlider('min-age',   'min-age-val',   d.min_track_age,    v => v + ' f');
+
+    const areaEl = document.getElementById('area-range');
+    if (d.blob_area_min !== null) {
+      areaEl.textContent = d.blob_area_min === d.blob_area_max
+        ? `${d.blob_area_min} px²`
+        : `${d.blob_area_min}–${d.blob_area_max} px²`;
+      areaEl.style.color = '#c9d1d9';
+    } else {
+      areaEl.textContent = 'none detected';
+      areaEl.style.color = '#484f58';
+    }
 
     const warmupRow = document.getElementById('warmup-row');
     warmupRow.style.display = d.warming_up ? 'flex' : 'none';

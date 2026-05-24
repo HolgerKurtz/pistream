@@ -1,5 +1,5 @@
 import threading
-from typing import Optional
+from typing import List, Optional
 
 
 class AppState:
@@ -16,6 +16,7 @@ class AppState:
         self._active_tracks: int = 0
         self._fps: float = 0.0
         self._warming_up: bool = True
+        self._detection_areas: List[int] = []
 
         # Tunable params (written by Flask /control, read by ZMQ loop)
         self._tracking_active: bool = True
@@ -34,12 +35,14 @@ class AppState:
         active_tracks: int,
         fps: float,
         warming_up: bool,
+        detection_areas: Optional[List[int]] = None,
     ) -> None:
         with self._lock:
             self._latest_frame = jpeg
             self._active_tracks = active_tracks
             self._fps = fps
             self._warming_up = warming_up
+            self._detection_areas = detection_areas or []
 
     def get_frame(self) -> Optional[bytes]:
         with self._lock:
@@ -56,6 +59,8 @@ class AppState:
                 'max_area':         self._max_area,
                 'bg_var_threshold': self._bg_var_threshold,
                 'min_track_age':    self._min_track_age,
+                'blob_area_min':    min(self._detection_areas) if self._detection_areas else None,
+                'blob_area_max':    max(self._detection_areas) if self._detection_areas else None,
             }
 
     # ------------------------------------------------------------------
