@@ -51,8 +51,15 @@ def run(
     current_fps = 0.0
     prev_tracking = True
 
+    # Timing accumulators — use a separate counter so FPS resets don't suppress logs
+    _TIMING_INTERVAL = 30
+    timing_count = 0
+    t_recv = t_track = t_encode = 0.0
+
     while not stop_event.is_set():
+        t0 = time.perf_counter()
         frame = _receive_frame(socket)
+        t1 = time.perf_counter()
         if frame is None:
             continue  # timeout or error — loop and check stop_event
 
@@ -82,7 +89,14 @@ def run(
             warming_up = False
             areas = []
 
+        t2 = time.perf_counter()
         _, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), display_quality])
+        t3 = time.perf_counter()
+
+        t_recv   += (t1 - t0) * 1000
+        t_track  += (t2 - t1) * 1000
+        t_encode += (t3 - t2) * 1000
+        timing_count += 1
 
         frame_count += 1
         now = time.time()
@@ -91,6 +105,16 @@ def run(
             current_fps = round(frame_count / elapsed, 1)
             frame_count = 0
             last_fps_time = now
+
+        if timing_count == _TIMING_INTERVAL:
+            n = _TIMING_INTERVAL
+            logger.info(
+                f"[timing/{n}f avg] recv+decode {t_recv/n:.1f}ms  "
+                f"track {t_track/n:.1f}ms  encode {t_encode/n:.1f}ms  "
+                f"total {(t_recv+t_track+t_encode)/n:.1f}ms"
+            )
+            timing_count = 0
+            t_recv = t_track = t_encode = 0.0
 
         state.push_frame(jpeg.tobytes(), active, current_fps, warming_up, areas)
 

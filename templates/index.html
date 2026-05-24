@@ -405,40 +405,45 @@
 
   <!-- Help -->
   <div class="section">
-    <div class="section-label">How it works</div>
-    <div class="info-box">
-      <strong>Track IDs &amp; trails</strong>
-      Each moving blob is assigned a number. That number follows the bird
-      until it disappears for too many frames — then it's dropped. The coloured
-      line is its recent path; older positions are dimmer. IDs reset to 0
-      when you pause tracking.
+    <details>
+      <summary class="section-label" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
+        How it works
+        <span style="font-size:0.65rem;color:#484f58;font-weight:400;text-transform:none;letter-spacing:0">▸ expand</span>
+      </summary>
+      <div class="info-box" style="margin-top:10px">
+        <strong>Track IDs &amp; trails</strong>
+        Each moving blob is assigned a number. That number follows the bird
+        until it disappears for too many frames — then it's dropped. The coloured
+        line is its recent path; older positions are dimmer. IDs reset to 0
+        when you pause tracking.
 
-      <strong style="margin-top:10px">Motion threshold</strong>
-      How much a pixel must change from the background before it counts as
-      movement. <em>Lower = more sensitive</em> — picks up subtle flickers,
-      but also wind and lighting changes. Raise it to ignore small variations
-      and only track clearly moving objects.
+        <strong style="margin-top:10px">Motion threshold</strong>
+        How much a pixel must change from the background before it counts as
+        movement. <em>Lower = more sensitive</em> — picks up subtle flickers,
+        but also wind and lighting changes. Raise it to ignore small variations
+        and only track clearly moving objects.
 
-      <strong style="margin-top:10px">Blob size (px²)</strong>
-      The video is 640 × 480 px. Size is measured in square pixels:
-      <ul>
-        <li>Insect / speck of dust: ~5–15 px²</li>
-        <li>Small bird (sparrow, swallow): ~20–150 px²</li>
-        <li>Large bird (gull, heron): ~150–600 px²</li>
-        <li>Aeroplane / cloud edge: 1000+ px²</li>
-      </ul>
-      Watch <em>Blobs this frame</em> above the sliders — it shows the live
-      range of what the tracker is seeing, so you can dial min/max to match.
+        <strong style="margin-top:10px">Blob size (px²)</strong>
+        The video is 1280 × 720 px. Size is measured in square pixels:
+        <ul>
+          <li>Insect / speck of dust: ~15–50 px²</li>
+          <li>Small bird (sparrow, swallow): ~60–400 px²</li>
+          <li>Large bird (gull, heron): ~400–2000 px²</li>
+          <li>Aeroplane / cloud edge: 3000+ px²</li>
+        </ul>
+        Watch <em>Blobs this frame</em> above the sliders — it shows the live
+        range of what the tracker is seeing, so you can dial min/max to match.
 
-      <strong style="margin-top:10px">Min track age</strong>
-      A blob must appear for this many consecutive frames before it's drawn.
-      Increase it to filter out one-frame flashes (rain drops, lens flare).
-      Decrease it if real birds are disappearing too quickly.
+        <strong style="margin-top:10px">Min track age</strong>
+        A blob must appear for this many consecutive frames before it's drawn.
+        Increase it to filter out one-frame flashes (rain drops, lens flare).
+        Decrease it if real birds are disappearing too quickly.
 
-      <strong style="margin-top:10px">Calibrating background</strong>
-      On startup the tracker spends a few seconds learning what the static
-      sky looks like. Nothing is detected during this window — that's normal.
-    </div>
+        <strong style="margin-top:10px">Calibrating background</strong>
+        On startup the tracker spends a few seconds learning what the static
+        sky looks like. Nothing is detected during this window — that's normal.
+      </div>
+    </details>
   </div>
 
 </div><!-- /sidebar -->

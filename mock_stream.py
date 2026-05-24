@@ -42,8 +42,11 @@ def main():
             logger.error(f"Could not open video source {source}")
             return
 
+    frame_interval = 1.0 / 10  # 10 fps target
     try:
         while True:
+            t_start = time.perf_counter()
+
             if source == 'noise':
                 frame = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
             else:
@@ -60,7 +63,12 @@ def main():
 
             _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
             socket.send(buffer)
-            time.sleep(0.1)  # 10 fps
+
+            # Sleep only the remaining time to hit the target frame interval
+            elapsed = time.perf_counter() - t_start
+            remaining = frame_interval - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
     except KeyboardInterrupt:
         logger.info("Stopping mock streamer...")
