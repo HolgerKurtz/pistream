@@ -19,21 +19,28 @@
     /* ── Video panel ── */
     #video-panel {
       flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #010409;
       min-width: 0;
+      background: #010409;
+      position: relative;
+      overflow: hidden;
     }
 
     #feed {
-      max-width: 100%;
-      max-height: 100vh;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
       display: block;
-      border-radius: 4px;
     }
 
     #no-signal {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       color: #484f58;
       font-size: 0.9rem;
       text-align: center;
@@ -286,6 +293,7 @@
   <div class="section">
     <div class="section-label">Control</div>
     <button id="toggle-btn" onclick="toggleTracking()">Pause Tracking</button>
+    <button id="flip-btn" onclick="toggleFlip()" style="margin-top:8px">Mirror: On</button>
   </div>
 
   <!-- Sliders -->
@@ -375,6 +383,7 @@
 
 <script>
   let tracking = true;
+  let flipped = true;
   let sliderDirty = {};    // prevent SSE from overwriting a slider the user is touching
   let debounceTimers = {};
 
@@ -413,6 +422,11 @@
 
     const warmupRow = document.getElementById('warmup-row');
     warmupRow.style.display = d.warming_up ? 'flex' : 'none';
+
+    if (typeof d.flip_horizontal !== 'undefined' && d.flip_horizontal !== flipped) {
+      flipped = d.flip_horizontal;
+      updateFlipBtn();
+    }
   };
 
   src.onerror = () => {
@@ -446,6 +460,19 @@
       dot.classList.add('paused');
       txt.textContent = 'Tracking paused';
     }
+  }
+
+  // ── Flip ─────────────────────────────────────────────────────────────────
+  function toggleFlip() {
+    flipped = !flipped;
+    post({ flip_horizontal: flipped });
+    updateFlipBtn();
+  }
+
+  function updateFlipBtn() {
+    const btn = document.getElementById('flip-btn');
+    btn.textContent = flipped ? 'Mirror: On' : 'Mirror: Off';
+    btn.classList.toggle('paused', !flipped);
   }
 
   // ── Sliders ───────────────────────────────────────────────────────────────

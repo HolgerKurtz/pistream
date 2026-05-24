@@ -17,4 +17,5 @@ def get_config() -> dict:
         'max_disappeared':  int(os.getenv('MAX_DISAPPEARED', 10)),
         'warmup_frames':    int(os.getenv('WARMUP_FRAMES', 60)),
         'min_track_age':    int(os.getenv('MIN_TRACK_AGE', 4)),
+        'flip_horizontal':  os.getenv('FLIP_HORIZONTAL', 'true').lower() == 'true',
     }

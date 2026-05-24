@@ -20,6 +20,7 @@ class AppState:
 
         # Tunable params (written by Flask /control, read by ZMQ loop)
         self._tracking_active: bool = True
+        self._flip_horizontal: bool = config.get('flip_horizontal', True)
         self._min_area: int = config['min_area']
         self._max_area: int = config['max_area']
         self._bg_var_threshold: float = config['bg_var_threshold']
@@ -53,6 +54,7 @@ class AppState:
             return {
                 'active_tracks':    self._active_tracks,
                 'tracking':         self._tracking_active,
+                'flip_horizontal':  self._flip_horizontal,
                 'warming_up':       self._warming_up,
                 'fps':              self._fps,
                 'min_area':         self._min_area,
@@ -72,6 +74,7 @@ class AppState:
         with self._lock:
             return {
                 'tracking_active':  self._tracking_active,
+                'flip_horizontal':  self._flip_horizontal,
                 'min_area':         self._min_area,
                 'max_area':         self._max_area,
                 'bg_var_threshold': self._bg_var_threshold,
@@ -83,6 +86,8 @@ class AppState:
         with self._lock:
             if 'tracking' in data:
                 self._tracking_active = bool(data['tracking'])
+            if 'flip_horizontal' in data:
+                self._flip_horizontal = bool(data['flip_horizontal'])
             if 'min_area' in data:
                 self._min_area = int(data['min_area'])
             if 'max_area' in data:

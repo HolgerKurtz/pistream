@@ -55,9 +55,9 @@ def run(
         if frame is None:
             continue  # timeout or error — loop and check stop_event
 
-        frame = cv2.flip(frame, 1)
-
         params = state.get_tracker_params()
+        if params['flip_horizontal']:
+            frame = cv2.flip(frame, 1)
 
         # Reset all tracks when the user pauses tracking
         if prev_tracking and not params['tracking_active']:
