@@ -1,111 +1,91 @@
-# PISTREAM
+# PISTREAM — Bird Tracker
 
-A lightweight, split-architecture motion detection and object tracking system designed for the Raspberry Pi Zero W.
+A lightweight, split-architecture bird tracking system for the Raspberry Pi Zero W.
 
 ## Overview
 
-This project uses a **Split Architecture** to overcome the limited processing power of the Raspberry Pi Zero W.
-*   **Edge (Raspberry Pi)**: Captures video and streams it efficiently over the network.
-*   **Server (PC/Cloud)**: Receives the stream and performs heavy-duty object detection using YOLO11.
+The Pi captures sky footage and streams it over the network. The server detects and tracks birds using background subtraction — no heavy ML model required. A browser-based UI provides a live view and real-time controls.
 
-## Architecture
-
-```mermaid
-graph LR
-    A[Raspberry Pi Zero W] -- ZMQ Stream (JPEG) --> B[Server / Cloud]
-    B -- Inference --> C[YOLO11]
-    C -- Output --> D[Display / Log]
 ```
-
-### Components
-
-*   **`pi_stream.py`**: Runs on the Raspberry Pi. Uses `Picamera2` to capture video and `ZMQ` to stream JPEG frames.
-*   **`server_inference.py`**: Runs on a powerful machine. Connects to the Pi's ZMQ stream, decodes frames, and runs YOLO11 tracking.
-*   **`mock_stream.py`**: A utility for testing. Mimics the Pi's ZMQ stream (from webcam, file, or noise).
+Raspberry Pi Zero W  ──ZMQ (JPEG)──▶  Server
+                                          │
+                                    BirdTracker
+                                   (OpenCV MOG2)
+                                          │
+                                    Browser UI
+                                  (live feed + controls)
+```
 
 ## Installation
 
-We use `uv` for fast dependency management.
+```bash
+uv pip install -r requirements.txt
+```
 
-1.  **Clone the reposi**Options:**
-*   `--headless`: Run without a GUI window (useful for cloud/headless servers).
-*   `--model`: Specify a different YOLO model (default: `yolo11n.pt`).v
-    source .venv/bin/activate
-    uv pip install -r requirements.txt
-    ```
+Pi dependencies (`requirements-pi.txt`): `pyzmq`, `numpy`, `python-dotenv`. `picamera2` is pre-installed on Raspberry Pi OS.
 
 ## Configuration
 
-Create a `.env` file in the project directory with the following variables:
+Create a `.env` file:
 
 ```env
 PORT=5555
-PI_IP=<IP_ADDRESS_OF_PI>
-# Optional Configuration
-# Task: detect, segment, pose, classify, track
-TASK=detect
-# Model: yolo11n.pt, yolo11n-seg.pt, yolo11n-pose.pt, yolo11n-cls.pt
-MODEL=yolo11n.pt
-HEADLESS=False
-MOCK_SOURCE=0
+PI_IP=localhost        # IP of the Pi when running on real hardware
+MOCK_SOURCE=0          # 0 = webcam, path = video file, "noise" = random frames
+WEB_PORT=5001
+
+# Bird tracker tuning (adjustable live in the browser UI)
+BG_HISTORY=500
+BG_VAR_THRESHOLD=16
+BIRD_MIN_AREA=20
+BIRD_MAX_AREA=2000
+TRAIL_LENGTH=60
+MAX_DISAPPEARED=10
+WARMUP_FRAMES=60
+MIN_TRACK_AGE=4
 ```
 
 ## Usage
 
-### 1. Start the Streamer (Edge)
+### Local development (Mac / Linux)
 
-**On the Raspberry Pi:**
-Transfer `pi_stream.py`, `requirements-pi.txt`, and your `.env` file to the Pi.
+Open two terminals:
 
-Install dependencies:
+```bash
+# Terminal 1 — mock video stream from webcam
+uv run python3 mock_stream.py
+
+# Terminal 2 — bird tracker + web UI
+uv run python3 main.py
+```
+
+Open `http://localhost:5001` in a browser.
+
+### On Raspberry Pi
+
+Transfer `pi_stream.py`, `requirements-pi.txt`, and `.env` to the Pi, then:
+
 ```bash
 pip install -r requirements-pi.txt
-```
-*Note: `picamera2` is usually pre-installed on Raspberry Pi OS. If not, install via `sudo apt install python3-picamera2`.*
-
-Run the streamer:
-```bash
 python3 pi_stream.py
 ```
 
-**Local Testing (Mock):**
-To simulate a stream (configure source in `.env`):
-```bash
-python3 mock_stream.py
-```
+Set `PI_IP` in `.env` to the Pi's IP address and run `main.py` on the server.
 
-### 2. Start the Inference Server
+## Tuning
 
-**On your Server/Mac:**
-Ensure your `.env` file has the correct `PI_IP`.
+| Parameter | Effect |
+|---|---|
+| `BG_VAR_THRESHOLD` | Lower = more sensitive. Increase to ignore wind-blown leaves. |
+| `BIRD_MIN_AREA` | Raise to filter out insects or noise. |
+| `BIRD_MAX_AREA` | Lower to ignore large moving objects (clouds, trees). |
+| `MIN_TRACK_AGE` | Frames a blob must persist before it's drawn. Raise to reduce false positives. |
+| `WARMUP_FRAMES` | Frames spent learning the initial background. MOG2 won't detect anything during this window. |
 
-```bash
-python3 server_inference.py
-```
-*   `--model`: Specify a different YOLO model (default: `yolo11n.pt`).
-
-## Supported Tasks
-
-You can switch between different computer vision tasks by setting the `TASK` variable in your `.env` file.
-
-| Task | Description | Recommended Model |
-| :--- | :--- | :--- |
-| `detect` | Object Detection (Bounding Boxes) | `yolo11n.pt` |
-| `segment` | Instance Segmentation (Masks) | `yolo11n-seg.pt` |
-| `pose` | Pose Estimation (Keypoints) | `yolo11n-pose.pt` |
-| `classify` | Image Classification | `yolo11n-cls.pt` |
-| `track` | Object Tracking (ID persistence) | `yolo11n.pt` (or seg/pose) |
-
-## Development
-
-*   **Requirements**: `ultralytics`, `opencv-python`, `zmq`, `imutils`, `lapx`, `python-dotenv`.
-*   **Protocol**: ZMQ PUB/SUB pattern. Frames are JPEG encoded.
+All parameters except `WARMUP_FRAMES` can be adjusted live in the browser sidebar without restarting.
 
 ## Troubleshooting
 
-### Pi Zero: "picam2 module not found"
-Ensure you are running on a Raspberry Pi with the latest OS (Bookworm or newer) and that `libcamera` is installed and working (`libcamera-hello`).
-1.  Run `sudo raspi-config`
-2.  Go to **Performance Options** -> **GPU Memory**
-3.  Set it to **128** (or higher)
-4.  Reboot the Pi.
+**"hundreds of birds" on startup** — increase `WARMUP_FRAMES` or `MIN_TRACK_AGE`.
+
+**Pi Zero: "picam2 module not found"** — run `sudo raspi-config` → Performance Options → GPU Memory → set to 128, then reboot.

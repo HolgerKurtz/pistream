@@ -1,10 +1,5 @@
-ultralytics
 opencv-python-headless
 numpy
-imutils
-zmq
 pyzmq
-lapx
 python-dotenv
-pygame
-
+flask

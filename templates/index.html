@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bird Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Video panel ── */
+    #video-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #010409;
+      min-width: 0;
+    }
+
+    #feed {
+      max-width: 100%;
+      max-height: 100vh;
+      display: block;
+      border-radius: 4px;
+    }
+
+    #no-signal {
+      color: #484f58;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      background: #161b22;
+      border-left: 1px solid #21262d;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .sidebar-header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f0f6fc;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-header .subtitle {
+      font-size: 0.75rem;
+      color: #484f58;
+      margin-top: 2px;
+    }
+
+    /* ── Sections ── */
+    .section {
+      padding: 16px 20px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #484f58;
+      margin-bottom: 12px;
+    }
+
+    /* ── Stats ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.7rem;
+      color: #8b949e;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f0f6fc;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-card.birds .stat-value { color: #58a6ff; }
+    .stat-card.fps .stat-value   { font-size: 1.1rem; color: #3fb950; }
+
+    /* ── Toggle button ── */
+    #toggle-btn {
+      width: 100%;
+      padding: 9px 16px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    #toggle-btn:hover { background: #30363d; }
+
+    #toggle-btn.paused {
+      background: #1f2d1f;
+      border-color: #3fb950;
+      color: #3fb950;
+    }
+
+    /* ── Sliders ── */
+    .slider-row {
+      margin-bottom: 14px;
+    }
+
+    .slider-row:last-child { margin-bottom: 0; }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .slider-name {
+      font-size: 0.8rem;
+      color: #c9d1d9;
+    }
+
+    .slider-val {
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+      color: #8b949e;
+      min-width: 2.5em;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #21262d;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #58a6ff;
+      border: 2px solid #0d1117;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #58a6ff;
+      border: 2px solid #0d1117;
+      cursor: pointer;
+    }
+
+    /* ── Info box ── */
+    .info-box {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: #8b949e;
+    }
+
+    .info-box strong {
+      color: #c9d1d9;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .info-box ul {
+      padding-left: 1.1em;
+    }
+
+    .info-box li { margin-bottom: 4px; }
+
+    /* ── Status dot ── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.78rem;
+      color: #8b949e;
+      margin-top: 12px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #3fb950;
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .dot.paused { background: #f78166; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="video-panel">
+  <img id="feed" src="/video_feed" alt="live feed"
+       onerror="this.style.display='none'; document.getElementById('no-signal').style.display='block'">
+  <div id="no-signal" style="display:none">
+    <div style="font-size:2rem;margin-bottom:8px">📡</div>
+    Waiting for stream…
+  </div>
+</div>
+
+<div id="sidebar">
+
+  <div class="sidebar-header">
+    <h1>Bird Tracker</h1>
+    <div class="subtitle">live sky surveillance</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-label">Status</div>
+    <div class="stats-grid">
+      <div class="stat-card birds">
+        <div class="stat-label">Active birds</div>
+        <div class="stat-value" id="active-count">—</div>
+      </div>
+      <div class="stat-card fps">
+        <div class="stat-label">FPS</div>
+        <div class="stat-value" id="fps-val">—</div>
+      </div>
+    </div>
+    <div class="status-row">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Tracking active</span>
+    </div>
+    <div class="status-row" id="warmup-row" style="display:none">
+      <div class="dot" style="background:#e3b341;animation:none"></div>
+      <span id="warmup-text">Calibrating background…</span>
+    </div>
+  </div>
+
+  <!-- Control -->
+  <div class="section">
+    <div class="section-label">Control</div>
+    <button id="toggle-btn" onclick="toggleTracking()">Pause Tracking</button>
+  </div>
+
+  <!-- Sliders -->
+  <div class="section">
+    <div class="section-label">Detection Tuning</div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <span class="slider-name">Sensitivity</span>
+        <span class="slider-val" id="thresh-val">—</span>
+      </div>
+      <input type="range" id="thresh" min="1" max="50" step="0.5"
+             oninput="onSlider('thresh','bg_var_threshold', +this.value)">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <span class="slider-name">Min blob size</span>
+        <span class="slider-val" id="min-area-val">— px</span>
+      </div>
+      <input type="range" id="min-area" min="5" max="300" step="5"
+             oninput="onSlider('min-area','min_area', +this.value)">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <span class="slider-name">Max blob size</span>
+        <span class="slider-val" id="max-area-val">— px</span>
+      </div>
+      <input type="range" id="max-area" min="100" max="5000" step="50"
+             oninput="onSlider('max-area','max_area', +this.value)">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <span class="slider-name">Min track age</span>
+        <span class="slider-val" id="min-age-val">— f</span>
+      </div>
+      <input type="range" id="min-age" min="1" max="20" step="1"
+             oninput="onSlider('min-age','min_track_age', +this.value)">
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div class="section">
+    <div class="section-label">About the numbers</div>
+    <div class="info-box">
+      <strong>What do the IDs mean?</strong>
+      <ul>
+        <li>Each detected bird is assigned a unique number.</li>
+        <li>The number stays with that bird as long as it's visible.</li>
+        <li>The coloured trail shows its recent flight path — older positions fade out.</li>
+        <li>If a bird disappears for more than a few frames it gets a new ID when it reappears.</li>
+        <li><b>Min track age</b> — a blob must appear for this many consecutive frames before it's shown. Higher = fewer false positives from leaves or noise.</li>
+      </ul>
+    </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<script>
+  let tracking = true;
+  let sliderDirty = {};    // prevent SSE from overwriting a slider the user is touching
+  let debounceTimers = {};
+
+  const SLIDER_FMT = {
+    'thresh':    v => (+v).toFixed(1),
+    'min-area':  v => v + ' px',
+    'max-area':  v => v + ' px',
+    'min-age':   v => v + ' f',
+  };
+
+  // ── SSE ──────────────────────────────────────────────────────────────────
+  const src = new EventSource('/stats');
+
+  src.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+
+    document.getElementById('active-count').textContent = d.active_tracks;
+    document.getElementById('fps-val').textContent = d.fps;
+
+    // Sync sliders only if user isn't actively touching them
+    syncSlider('thresh',    'thresh-val',    d.bg_var_threshold, v => v.toFixed(1));
+    syncSlider('min-area',  'min-area-val',  d.min_area,         v => v + ' px');
+    syncSlider('max-area',  'max-area-val',  d.max_area,         v => v + ' px');
+    syncSlider('min-age',   'min-age-val',   d.min_track_age,    v => v + ' f');
+
+    const warmupRow = document.getElementById('warmup-row');
+    warmupRow.style.display = d.warming_up ? 'flex' : 'none';
+  };
+
+  src.onerror = () => {
+    document.getElementById('fps-val').textContent = '—';
+  };
+
+  function syncSlider(id, labelId, value, fmt) {
+    if (sliderDirty[id]) return;
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+    document.getElementById(labelId).textContent = fmt(value);
+  }
+
+  // ── Toggle tracking ───────────────────────────────────────────────────────
+  function toggleTracking() {
+    tracking = !tracking;
+    post({ tracking });
+
+    const btn  = document.getElementById('toggle-btn');
+    const dot  = document.getElementById('status-dot');
+    const txt  = document.getElementById('status-text');
+
+    if (tracking) {
+      btn.textContent = 'Pause Tracking';
+      btn.classList.remove('paused');
+      dot.classList.remove('paused');
+      txt.textContent = 'Tracking active';
+    } else {
+      btn.textContent = 'Resume Tracking';
+      btn.classList.add('paused');
+      dot.classList.add('paused');
+      txt.textContent = 'Tracking paused';
+    }
+  }
+
+  // ── Sliders ───────────────────────────────────────────────────────────────
+  function onSlider(sliderId, param, value) {
+    sliderDirty[sliderId] = true;
+
+    // Update label immediately using the per-slider format function
+    const labelId = sliderId + '-val';
+    const el = document.getElementById(labelId);
+    if (el) el.textContent = (SLIDER_FMT[sliderId] || (v => v))(value);
+
+    // Debounce the POST so we don't flood the server while dragging
+    clearTimeout(debounceTimers[sliderId]);
+    debounceTimers[sliderId] = setTimeout(() => {
+      post({ [param]: value });
+      sliderDirty[sliderId] = false;
+    }, 250);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function post(body) {
+    fetch('/control', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+</script>
+</body>
+</html>
