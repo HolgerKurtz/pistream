@@ -44,6 +44,7 @@ def run(
     tracker: BirdTracker,
     state: AppState,
     stop_event: threading.Event,
+    display_quality: int = 85,
 ) -> None:
     frame_count = 0
     last_fps_time = time.time()
@@ -81,7 +82,7 @@ def run(
             warming_up = False
             areas = []
 
-        _, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        _, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), display_quality])
 
         frame_count += 1
         now = time.time()

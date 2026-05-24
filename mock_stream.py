@@ -6,10 +6,8 @@ import os
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -17,11 +15,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    # Get configuration from environment variables
-    port = int(os.getenv('PORT', 5555))
-    source = os.getenv('MOCK_SOURCE', '0') # Default to webcam 0
+    port    = int(os.getenv('PORT', 5555))
+    source  = os.getenv('MOCK_SOURCE', '0')
+    width   = int(os.getenv('STREAM_WIDTH', 1280))
+    height  = int(os.getenv('STREAM_HEIGHT', 720))
+    quality = int(os.getenv('STREAM_QUALITY', 85))
 
-    logger.info(f"Initializing Mock Streamer on port {port} with source {source}...")
+    logger.info(f"Mock Streamer: port={port} source={source} resolution={width}×{height} quality={quality}")
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -32,7 +32,6 @@ def main():
         logger.error(f"Failed to bind ZMQ socket: {e}")
         return
 
-    # Handle numeric source for webcam
     if source.isdigit():
         source = int(source)
 
@@ -40,15 +39,13 @@ def main():
     if source != 'noise':
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
-            logger.error(f"Error: Could not open video source {source}")
+            logger.error(f"Could not open video source {source}")
             return
 
     try:
         while True:
             if source == 'noise':
-                # Generate random noise frame
-                frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-                ret = True
+                frame = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
             else:
                 ret, frame = cap.read()
                 if not ret:
@@ -56,22 +53,19 @@ def main():
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
 
-            # Resize to match Pi Zero expectations (optional but good for simulation)
-            frame = cv2.resize(frame, (640, 480))
+            # Resize only when the captured size differs from the target
+            h, w = frame.shape[:2]
+            if (w, h) != (width, height):
+                frame = cv2.resize(frame, (width, height))
 
-            # Compress frame
-            _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            
-            # Send data
+            _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
             socket.send(buffer)
-            
-            # Simulate 10 FPS
-            time.sleep(0.1)
+            time.sleep(0.1)  # 10 fps
 
     except KeyboardInterrupt:
         logger.info("Stopping mock streamer...")
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+        logger.error(f"Unexpected error: {e}")
     finally:
         if cap:
             cap.release()

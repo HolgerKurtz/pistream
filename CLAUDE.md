@@ -34,10 +34,15 @@ PI_IP=localhost       # IP of the Pi (or localhost for mock)
 MOCK_SOURCE=0         # 0 = webcam, path = video file, "noise" = random frames
 WEB_PORT=5001         # Flask web UI port (avoid 5000 — macOS uses it for AirPlay)
 
+STREAM_WIDTH=1280     # capture + ZMQ frame width
+STREAM_HEIGHT=720     # capture + ZMQ frame height
+STREAM_QUALITY=85     # JPEG quality sent over ZMQ (1–100)
+DISPLAY_QUALITY=85    # JPEG quality re-encoded for browser MJPEG
+
 BG_HISTORY=500        # MOG2 frame history for background model
 BG_VAR_THRESHOLD=16   # MOG2 sensitivity — lower = more sensitive
-BIRD_MIN_AREA=20      # min contour area in px (filters noise)
-BIRD_MAX_AREA=2000    # max contour area in px (filters large non-birds)
+BIRD_MIN_AREA=60      # min contour area in px (scaled for 1280×720)
+BIRD_MAX_AREA=6000    # max contour area in px (scaled for 1280×720)
 TRAIL_LENGTH=60       # past positions drawn per bird
 MAX_DISAPPEARED=10    # frames before a lost track is removed
 WARMUP_FRAMES=60      # frames to run fast background learning at startup

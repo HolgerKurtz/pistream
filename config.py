@@ -18,4 +18,8 @@ def get_config() -> dict:
         'warmup_frames':    int(os.getenv('WARMUP_FRAMES', 60)),
         'min_track_age':    int(os.getenv('MIN_TRACK_AGE', 4)),
         'flip_horizontal':  os.getenv('FLIP_HORIZONTAL', 'true').lower() == 'true',
+        'stream_width':     int(os.getenv('STREAM_WIDTH', 1280)),
+        'stream_height':    int(os.getenv('STREAM_HEIGHT', 720)),
+        'stream_quality':   int(os.getenv('STREAM_QUALITY', 85)),
+        'display_quality':  int(os.getenv('DISPLAY_QUALITY', 85)),
     }

@@ -41,7 +41,7 @@ def main() -> None:
     stop_event = threading.Event()
     zmq_thread = threading.Thread(
         target=zmq_loop.run,
-        args=(socket, tracker, state, stop_event),
+        args=(socket, tracker, state, stop_event, config['display_quality']),
         daemon=True,
     )
     zmq_thread.start()
