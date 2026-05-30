@@ -567,7 +567,7 @@
   function post(body) {
     fetch('/control', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'BirdsInTheSky' },
       body: JSON.stringify(body),
     });
   }

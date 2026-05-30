@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import logging
+from urllib.parse import urlparse
 from flask import Flask, Response, render_template, request, jsonify
 from state import AppState
 
@@ -51,11 +52,24 @@ def stats_sse():
     )
 
 
+def _is_local_origin(origin: str) -> bool:
+    """Return True only for exact http://localhost or http://127.0.0.1 (any port)."""
+    try:
+        p = urlparse(origin)
+        return p.scheme == 'http' and p.hostname in ('localhost', '127.0.0.1')
+    except Exception:
+        return False
+
+
 @app.route('/control', methods=['POST'])
 def control():
+    # Require the custom header the UI always sends; cross-origin requests
+    # cannot set custom headers without a CORS preflight (which we don't serve).
+    if request.headers.get('X-Requested-With') != 'BirdsInTheSky':
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    # Defence-in-depth: if Origin is present, verify it is exactly localhost.
     origin = request.headers.get('Origin', '')
-    if origin and not (origin.startswith('http://localhost') or
-                       origin.startswith('http://127.0.0.1')):
+    if origin and not _is_local_origin(origin):
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     data = request.get_json() or {}
     if not data:
