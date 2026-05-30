@@ -53,9 +53,13 @@ def stats_sse():
 
 @app.route('/control', methods=['POST'])
 def control():
-    data = request.get_json(force=True) or {}
+    origin = request.headers.get('Origin', '')
+    if origin and not (origin.startswith('http://localhost') or
+                       origin.startswith('http://127.0.0.1')):
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    data = request.get_json() or {}
     if not data:
-        logger.warning("Empty or unparseable /control payload")
+        logger.warning("Empty or non-JSON /control payload")
         return jsonify({'ok': False, 'error': 'empty payload'}), 400
     _state.apply_control(data)
     return jsonify({'ok': True})

@@ -8,6 +8,7 @@ def get_config() -> dict:
     return {
         'camera_index':     int(os.getenv('CAMERA_INDEX', 1)),
         'web_port':         int(os.getenv('WEB_PORT', 5001)),
+        'bind_host':        os.getenv('BIND_HOST', '127.0.0.1'),
         'bg_history':       int(os.getenv('BG_HISTORY', 500)),
         'bg_var_threshold': float(os.getenv('BG_VAR_THRESHOLD', 4.0)),
         'min_area':         int(os.getenv('BIRD_MIN_AREA', 10)),

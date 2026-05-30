@@ -82,8 +82,8 @@ class AppState:
             if 'flip_horizontal' in data:
                 self._flip_horizontal = bool(data['flip_horizontal'])
             if 'trail_length' in data:
-                self._trail_length = int(data['trail_length'])
+                self._trail_length = max(1, min(1000, int(data['trail_length'])))
             if 'trail_thickness' in data:
-                self._trail_thickness = int(data['trail_thickness'])
+                self._trail_thickness = max(1, min(20, int(data['trail_thickness'])))
             if 'sky_darkness_pct' in data:
-                self._sky_darkness_pct = int(data['sky_darkness_pct'])
+                self._sky_darkness_pct = max(1, min(95, int(data['sky_darkness_pct'])))

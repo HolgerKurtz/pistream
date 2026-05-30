@@ -58,10 +58,11 @@ def main() -> None:
         daemon=True,
     ).start()
 
-    logger.info(f"Web UI → http://localhost:{port}")
+    bind = config['bind_host']
+    logger.info(f"Web UI → http://localhost:{port}  (bound to {bind})")
     try:
         web_app.app.run(
-            host='0.0.0.0',
+            host=bind,
             port=port,
             threaded=True,
             use_reloader=False,
