@@ -3,18 +3,21 @@ import numpy as np
 import logging
 from collections import deque, OrderedDict
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
 
+def _dist(a: Tuple[int, int], b: Tuple[int, int]) -> float:
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
 @dataclass
 class BirdResults:
-    tracks: Dict[int, deque]                    # id -> deque of (cx, cy) — confirmed tracks only
-    boxes: List[Tuple[int, int, int, int]]       # list of (x, y, w, h)
+    tracks: Dict[int, deque]              # id -> deque of (cx, cy) — confirmed tracks only
+    boxes: List[Tuple[int, int, int, int]]
     centroids: List[Tuple[int, int]]
-    warming_up: bool                             # True during initial background learning
-    detection_areas: List[int]                  # pixel areas of all blobs that passed the size filter
+    warming_up: bool
 
 
 class BirdTracker:
@@ -25,13 +28,19 @@ class BirdTracker:
         min_area: int = 20,
         max_area: int = 2000,
         trail_length: int = 60,
+        trail_thickness: int = 3,
         max_disappeared: int = 10,
         warmup_frames: int = 60,
         min_track_age: int = 4,
+        max_brightness: int = 120,
+        max_match_distance: int = 150,
     ):
         self.min_area = min_area
         self.max_area = max_area
-        self.trail_length = trail_length
+        self.max_brightness = max_brightness
+        self.max_match_distance = max_match_distance
+        self._trail_length = trail_length
+        self.trail_thickness = trail_thickness
         self.max_disappeared = max_disappeared
         self.warmup_frames = warmup_frames
         self.min_track_age = min_track_age
@@ -42,8 +51,10 @@ class BirdTracker:
             detectShadows=False,
         )
 
-        self._kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         self._kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+        self._sky_mean: int = 0
+        self._sky_darkness_pct: int = 25
 
         self._frame_count = 0
         self._next_id = 0
@@ -54,13 +65,44 @@ class BirdTracker:
 
         logger.info(
             f"BirdTracker initialized (min_area={min_area}, max_area={max_area}, "
-            f"trail={trail_length}, max_disappeared={max_disappeared}, "
-            f"warmup={warmup_frames}, min_track_age={min_track_age})"
+            f"max_brightness={max_brightness}, trail={trail_length}×{trail_thickness}px, "
+            f"max_disappeared={max_disappeared}, warmup={warmup_frames}, "
+            f"min_track_age={min_track_age})"
         )
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
+
+    @property
+    def trail_length(self) -> int:
+        return self._trail_length
+
+    @trail_length.setter
+    def trail_length(self, value: int) -> None:
+        if value == self._trail_length:
+            return
+        self._trail_length = value
+        for obj_id, old in list(self._tracks.items()):
+            self._tracks[obj_id] = deque(old, maxlen=value)
+
+    @property
+    def sky_darkness_pct(self) -> int:
+        return self._sky_darkness_pct
+
+    @sky_darkness_pct.setter
+    def sky_darkness_pct(self, value: int) -> None:
+        if value == self._sky_darkness_pct:
+            return
+        self._sky_darkness_pct = value
+        if self._sky_mean > 0:
+            threshold = max(20, min(220, int(self._sky_mean * (1 - value / 100))))
+            self.max_brightness = threshold
+            logger.info(f"max_brightness updated to {threshold} (sky_mean={self._sky_mean}, darkness={value}%)")
+
+    # MOG2 and contour detection run at this fraction of the capture resolution.
+    # 0.5 → 640×360 on a 1280×720 source: ~4× fewer pixels, ~4× faster.
+    _PROC_SCALE: float = 0.5
 
     def process_frame(self, frame: np.ndarray) -> Tuple[BirdResults, np.ndarray]:
         self._frame_count += 1
@@ -68,27 +110,42 @@ class BirdTracker:
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Use a high learning rate during warm-up so MOG2 learns the
-        # background quickly; after that let it adapt at its natural pace.
+        # Downscale for MOG2 and contour detection; keep full-res gray for annotation.
+        scale = self._PROC_SCALE
+        proc = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
         learning_rate = 0.5 if warming_up else -1
-        fg_mask = self.bg_subtractor.apply(gray, learningRate=learning_rate)
-        fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, self._kernel_open)
+        fg_mask = self.bg_subtractor.apply(proc, learningRate=learning_rate)
+        fg_mask_raw = fg_mask  # pre-dilate: marks exactly the moving pixels, used for brightness sampling
         fg_mask = cv2.dilate(fg_mask, self._kernel_dilate, iterations=1)
 
         centroids: List[Tuple[int, int]] = []
         boxes: List[Tuple[int, int, int, int]] = []
-        areas: List[int] = []
 
         if not warming_up:
             contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            inv = 1.0 / scale
+            area_inv = inv * inv  # contour areas are in proc pixels²; scale to full-res px²
             for cnt in contours:
-                area = int(cv2.contourArea(cnt))
-                if not (self.min_area <= area <= self.max_area):
+                area_fr = int(cv2.contourArea(cnt) * area_inv)
+                if not (self.min_area <= area_fr <= self.max_area):
                     continue
-                x, y, w, h = cv2.boundingRect(cnt)
-                centroids.append((x + w // 2, y + h // 2))
-                boxes.append((x, y, w, h))
-                areas.append(area)
+                px, py, pw, ph = cv2.boundingRect(cnt)
+                # Sample brightness from the actual moving pixels (pre-dilate mask, proc scale).
+                # The dilated bounding box is mostly sky padding; fg_mask_raw isolates the bird pixels.
+                fg_crop = fg_mask_raw[py:py + ph, px:px + pw]
+                proc_crop = proc[py:py + ph, px:px + pw]
+                bird_pixels = proc_crop[fg_crop > 0]
+                mean_brightness = int(np.mean(bird_pixels)) if bird_pixels.size > 0 else 128
+                # Map bounding rect back to full-res coordinates for centroid & box output
+                fx = int(round(px * inv))
+                fy = int(round(py * inv))
+                fw = int(round(pw * inv))
+                fh = int(round(ph * inv))
+                if mean_brightness > self.max_brightness:
+                    continue
+                centroids.append((fx + fw // 2, fy + fh // 2))
+                boxes.append((fx, fy, fw, fh))
 
         self._update_tracks(centroids, boxes)
 
@@ -108,9 +165,28 @@ class BirdTracker:
             boxes=confirmed_boxes,
             centroids=centroids,
             warming_up=warming_up,
-            detection_areas=areas,
         )
         return results, annotated
+
+    def calibrate_sky_brightness(self, frame: np.ndarray) -> int:
+        """
+        Measure sky brightness and set max_brightness = sky_mean × (1 - sky_darkness_pct/100).
+        Dark outliers (trees < 40) and blown-out highlights (> 245) are excluded.
+        Returns the new max_brightness value.
+        """
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+        sky_pixels = gray[(gray > 40) & (gray < 245)]
+        if sky_pixels.size < 1000:
+            logger.warning("Too few sky pixels for brightness calibration — keeping current value")
+            return self.max_brightness
+        self._sky_mean = int(np.mean(sky_pixels))
+        threshold = max(20, min(220, int(self._sky_mean * (1 - self._sky_darkness_pct / 100))))
+        self.max_brightness = threshold
+        logger.info(
+            f"Brightness calibrated: sky_mean={self._sky_mean} → max_brightness={threshold} "
+            f"(darkness={self._sky_darkness_pct}%)"
+        )
+        return threshold
 
     def reset(self) -> None:
         """Clear all tracks and restart IDs from 0. Called when tracking is paused."""
@@ -156,6 +232,8 @@ class BirdTracker:
         used_rows, used_cols = set(), set()
         for r, c in zip(rows, cols):
             if r in used_rows or c in used_cols:
+                continue
+            if D[r, c] > self.max_match_distance:
                 continue
             obj_id = existing_ids[r]
             self._tracks[obj_id].append(centroids[c])
@@ -220,8 +298,10 @@ class BirdTracker:
             n = len(pts)
 
             for i in range(1, n):
+                if _dist(pts[i - 1], pts[i]) > self.max_match_distance:
+                    continue
                 alpha = i / n
-                thickness = max(1, int(alpha * 3))
+                thickness = max(1, int(alpha * self.trail_thickness))
                 c = tuple(int(v * alpha) for v in color)
                 cv2.line(display, pts[i - 1], pts[i], c, thickness)
 

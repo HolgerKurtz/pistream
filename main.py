@@ -1,6 +1,4 @@
-import cv2
 import logging
-import os
 import threading
 import time
 import webbrowser
@@ -18,66 +16,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _detect_cameras() -> list:
-    cameras = []
-    # Suppress OpenCV's "out of bound" stderr messages while probing
-    devnull_fd = os.open(os.devnull, os.O_WRONLY)
-    saved_stderr = os.dup(2)
-    os.dup2(devnull_fd, 2)
-    try:
-        for i in range(5):
-            cap = cv2.VideoCapture(i)
-            if cap.isOpened():
-                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                cameras.append({'index': i, 'label': f'Camera {i}  ({w}×{h})'})
-                cap.release()
-    finally:
-        os.dup2(saved_stderr, 2)
-        os.close(saved_stderr)
-        os.close(devnull_fd)
-    return cameras
-
-
 def main() -> None:
     config = get_config()
 
-    logger.info("Detecting cameras…")
-    camera_list = _detect_cameras()
-    if not camera_list:
-        logger.error("No cameras found.")
-        return
-    logger.info(f"Found cameras: {[c['label'] for c in camera_list]}")
-
-    # Use configured index if available, otherwise first detected camera
-    available_indices = [c['index'] for c in camera_list]
-    default_index = config['camera_index'] if config['camera_index'] in available_indices else camera_list[0]['index']
+    camera_index = config['camera_index']
 
     tracker = BirdTracker(
         bg_history=config['bg_history'],
         bg_var_threshold=config['bg_var_threshold'],
         min_area=config['min_area'],
         max_area=config['max_area'],
+        max_brightness=config['max_brightness'],
+        max_match_distance=config['max_match_distance'],
         trail_length=config['trail_length'],
+        trail_thickness=config['trail_thickness'],
         max_disappeared=config['max_disappeared'],
         warmup_frames=config['warmup_frames'],
         min_track_age=config['min_track_age'],
     )
 
     try:
-        cap = camera_loop.initialize(default_index)
+        cap = camera_loop.initialize(camera_index)
     except RuntimeError as e:
         logger.error(e)
         return
 
-    config['camera_index'] = default_index
-    state = AppState(config, camera_list)
+    state = AppState(config)
     web_app.init(state)
 
     stop_event = threading.Event()
     cam_thread = threading.Thread(
         target=camera_loop.run,
-        args=(cap, tracker, state, stop_event, config['display_quality']),
+        args=(cap, tracker, state, stop_event, config['display_quality'], config['recalibrate_interval']),
         daemon=True,
     )
     cam_thread.start()

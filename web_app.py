@@ -25,11 +25,6 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/cameras')
-def cameras():
-    return jsonify(_state.get_camera_list())
-
-
 @app.route('/video_feed')
 def video_feed():
     def generate():

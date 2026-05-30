@@ -3,3 +3,6 @@ __pycache__
 .env
 *.pt
 .DS_Store
+build/
+dist/
+*.spec
