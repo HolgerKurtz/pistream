@@ -42,7 +42,7 @@ def main() -> None:
         return
 
     state = AppState(config)
-    web_app.init(state)
+    web_app.init(state, config)
 
     stop_event = threading.Event()
     cam_thread = threading.Thread(

@@ -24,4 +24,5 @@ def get_config() -> dict:
         'recalibrate_interval':  float(os.getenv('RECALIBRATE_INTERVAL', 15.0)),
         'sky_darkness_pct':      int(os.getenv('SKY_DARKNESS_PCT', 25)),
         'max_match_distance':    int(os.getenv('MAX_MATCH_DISTANCE', 150)),
+        'sound_note_duration':   float(os.getenv('SOUND_NOTE_DURATION', 2.0)),
     }

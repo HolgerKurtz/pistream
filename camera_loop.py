@@ -72,11 +72,20 @@ def run(
             results, annotated = tracker.process_frame(frame)
             active = len(results.tracks)
             warming_up = results.warming_up
+
+            h, w = annotated.shape[:2]
+            birds = []
+            for obj_id, trail in results.tracks.items():
+                if not trail:
+                    continue
+                cx, cy = trail[-1]
+                birds.append({'id': obj_id, 'x': round(cx / w, 4), 'y': round(cy / h, 4)})
         else:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             annotated = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
             active = 0
             warming_up = False
+            birds = []
 
         t2 = time.perf_counter()
         _, jpeg = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), display_quality])
@@ -104,6 +113,6 @@ def run(
             timing_count = 0
             t_capture = t_track = t_encode = 0.0
 
-        state.push_frame(jpeg.tobytes(), active, current_fps, warming_up)
+        state.push_frame(jpeg.tobytes(), active, current_fps, warming_up, birds)
 
     logger.info("Camera loop stopped.")

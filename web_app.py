@@ -14,16 +14,19 @@ _here = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.pa
 app = Flask(__name__, template_folder=os.path.join(_here, 'templates'))
 
 _state: AppState
+_sound_note_duration: float = 2.0
 
 
-def init(state: AppState) -> None:
-    global _state
+def init(state: AppState, config: dict = None) -> None:
+    global _state, _sound_note_duration
     _state = state
+    if config:
+        _sound_note_duration = config.get('sound_note_duration', 2.0)
 
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', note_duration=_sound_note_duration)
 
 
 @app.route('/video_feed')

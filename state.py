@@ -16,6 +16,7 @@ class AppState:
         self._active_tracks: int = 0
         self._fps: float = 0.0
         self._warming_up: bool = True
+        self._birds: list = []   # per-frame [{'id', 'x', 'y'}] in normalized 0..1 coords
 
         # Live-tunable params (written by Flask /control or auto-calibration, read by camera loop)
         self._tracking_active: bool = True
@@ -29,12 +30,14 @@ class AppState:
     # Camera loop → Flask  (camera loop writes, Flask reads)
     # ------------------------------------------------------------------
 
-    def push_frame(self, jpeg: bytes, active_tracks: int, fps: float, warming_up: bool) -> None:
+    def push_frame(self, jpeg: bytes, active_tracks: int, fps: float, warming_up: bool,
+                   birds: Optional[list] = None) -> None:
         with self._lock:
             self._latest_frame = jpeg
             self._active_tracks = active_tracks
             self._fps = fps
             self._warming_up = warming_up
+            self._birds = birds or []
 
     def get_frame(self) -> Optional[bytes]:
         with self._lock:
@@ -51,6 +54,7 @@ class AppState:
                 'trail_length':     self._trail_length,
                 'trail_thickness':  self._trail_thickness,
                 'sky_darkness_pct': self._sky_darkness_pct,
+                'birds':            self._birds,
             }
 
     # ------------------------------------------------------------------

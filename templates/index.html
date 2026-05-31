@@ -314,6 +314,33 @@
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.4; }
     }
+
+    /* ── Sound: waveform select ── */
+    .sound-select {
+      width: 150px;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* ── Sound: grid overlay over the (letterboxed) video ── */
+    .grid-overlay {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      border: 1px solid rgba(88, 166, 255, 0.45);
+      background-image:
+        linear-gradient(to right, rgba(88, 166, 255, 0.35) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(88, 166, 255, 0.35) 1px, transparent 1px);
+      background-size: 12.5% 12.5%;
+    }
+
+    .grid-overlay.show { display: block; }
   </style>
 </head>
 <body>
@@ -325,6 +352,7 @@
     <div style="font-size:2rem;margin-bottom:8px">📡</div>
     Waiting for stream…
   </div>
+  <div id="grid-overlay" class="grid-overlay"></div>
 </div>
 
 <div id="sidebar">
@@ -410,6 +438,48 @@
     </div>
   </div>
 
+  <!-- Sound -->
+  <div class="section">
+    <div class="section-label">Sound</div>
+
+    <div class="control-row">
+      <span class="control-label">Music</span>
+      <div class="pill-toggle" id="sound-toggle" onclick="toggleSound()">
+        <div class="pill-option active" id="pill-sound-off">Off</div>
+        <div class="pill-option" id="pill-sound-on">On</div>
+        <div class="pill-thumb" id="pill-sound-thumb"></div>
+      </div>
+    </div>
+
+    <div class="control-row" style="margin-top:12px">
+      <span class="control-label">Waveform</span>
+      <select class="sound-select" id="waveform" onchange="setWaveform(this.value)">
+        <option value="sine">Sine</option>
+        <option value="triangle">Triangle</option>
+        <option value="square">Square</option>
+        <option value="sawtooth">Sawtooth</option>
+      </select>
+    </div>
+
+    <div class="slider-row" style="margin-top:14px">
+      <div class="slider-header">
+        <span class="slider-name">Note duration</span>
+        <span class="slider-val" id="duration-val">—</span>
+      </div>
+      <input type="range" id="duration" min="1.0" max="5.0" step="0.1"
+             oninput="onSoundSlider(+this.value)">
+    </div>
+
+    <div class="control-row" style="margin-top:14px">
+      <span class="control-label">Grid overlay</span>
+      <div class="pill-toggle" id="grid-toggle" onclick="toggleGrid()">
+        <div class="pill-option active" id="pill-grid-off">Hide</div>
+        <div class="pill-option" id="pill-grid-on">Show</div>
+        <div class="pill-thumb" id="pill-grid-thumb"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Help -->
   <div class="section">
     <details>
@@ -487,6 +557,7 @@
       updateFlipToggle();
     }
 
+    if (Array.isArray(d.birds)) onBirds(d.birds);
   };
 
   src.onerror = () => {
@@ -560,8 +631,147 @@
     }, 250);
   }
 
+  // ── Sound: musical birds ───────────────────────────────────────────────────
+  // 8 columns L→R = major scales rooted at C D E F G A B C; 8 rows bottom→top =
+  // ascending scale (root at bottom, octave at top). Image y=0 is the top, so the
+  // grid row is flipped at lookup. All audio + settings live here in the browser.
+  const ROOTS = [60, 62, 64, 65, 67, 69, 71, 72];   // C4 D4 E4 F4 G4 A4 B4 C5
+  const MAJOR = [0, 2, 4, 5, 7, 9, 11, 12];
+  const midiToFreq = m => 440 * Math.pow(2, (m - 69) / 12);
+  const NOTE_FREQ = ROOTS.map(r => MAJOR.map(iv => midiToFreq(r + iv)));  // [col][gridRow]
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  const SOUND_DEFAULTS = { wave: 'sine', duration: {{ note_duration }}, showGrid: false };
+  let settings = loadSettings();
+  settings.enabled = false;   // always start Off — audio needs a fresh user gesture per load
+  settings.duration = clamp(settings.duration, 1.0, 5.0);   // keep within the slider range
+
+  let actx = null, masterGain = null, voiceCount = 0;
+  const MAX_VOICES = 16;
+  const birdCells = new Map();   // bird id -> "col,gridRow"
+
+  function loadSettings() {
+    try {
+      return Object.assign({}, SOUND_DEFAULTS, JSON.parse(localStorage.getItem('musicalBirds') || '{}'));
+    } catch (e) {
+      return Object.assign({}, SOUND_DEFAULTS);
+    }
+  }
+
+  function saveSettings() {
+    // 'enabled' is intentionally not persisted — autoplay policy requires a gesture each load.
+    localStorage.setItem('musicalBirds', JSON.stringify({
+      wave: settings.wave, duration: settings.duration, showGrid: settings.showGrid,
+    }));
+  }
+
+  function ensureAudio() {
+    if (!actx) {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = actx.createGain();
+      masterGain.gain.value = 0.3;
+      masterGain.connect(actx.destination);
+    }
+    if (actx.state === 'suspended') actx.resume();
+  }
+
+  function playNote(freq) {
+    if (!settings.enabled || !actx || voiceCount >= MAX_VOICES) return;
+    const t = actx.currentTime;
+    const A = 0.01, D = Math.max(0.1, settings.duration), peak = 0.9;
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = settings.wave;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + A);          // click-free attack
+    g.gain.exponentialRampToValueAtTime(0.0001, t + A + D);    // click-free release
+    osc.connect(g).connect(masterGain);
+    osc.start(t);
+    osc.stop(t + A + D + 0.02);
+    voiceCount++;
+    osc.onended = () => { osc.disconnect(); g.disconnect(); voiceCount--; };
+  }
+
+  function onBirds(birds) {
+    if (!settings.enabled) { birdCells.clear(); return; }
+    const seen = new Set();
+    for (const b of birds) {
+      seen.add(b.id);
+      const col = clamp(Math.floor(b.x * 8), 0, 7);
+      const gridRow = 7 - clamp(Math.floor(b.y * 8), 0, 7);   // flip: bottom = root
+      const key = col + ',' + gridRow;
+      if (birdCells.get(b.id) !== key) {        // play only on entering a new cell
+        birdCells.set(b.id, key);
+        playNote(NOTE_FREQ[col][gridRow]);
+      }
+    }
+    for (const id of [...birdCells.keys()]) if (!seen.has(id)) birdCells.delete(id);
+  }
+
+  function toggleSound() {
+    settings.enabled = !settings.enabled;
+    if (settings.enabled) ensureAudio();   // this click is the autoplay-unlocking gesture
+    else birdCells.clear();
+    updateSoundToggle();
+  }
+
+  function setWaveform(v) { settings.wave = v; saveSettings(); }
+
+  function onSoundSlider(value) {
+    settings.duration = value;
+    document.getElementById('duration-val').textContent = value.toFixed(1) + ' s';
+    saveSettings();
+  }
+
+  function toggleGrid() {
+    settings.showGrid = !settings.showGrid;
+    saveSettings();
+    updateGridToggle();
+    layoutGrid();
+  }
+
+  function setPill(thumbId, offId, onId, on) {
+    document.getElementById(thumbId).style.left = on ? 'calc(50%)' : '2px';
+    document.getElementById(onId).classList.toggle('active', on);
+    document.getElementById(offId).classList.toggle('active', !on);
+  }
+  const updateSoundToggle = () => setPill('pill-sound-thumb', 'pill-sound-off', 'pill-sound-on', settings.enabled);
+  const updateGridToggle  = () => setPill('pill-grid-thumb', 'pill-grid-off', 'pill-grid-on', settings.showGrid);
+
+  // Position the 8×8 overlay over the letterboxed image (object-fit: contain).
+  function layoutGrid() {
+    const overlay = document.getElementById('grid-overlay');
+    if (!settings.showGrid) { overlay.classList.remove('show'); return; }
+    const feed = document.getElementById('feed');
+    const panel = document.getElementById('video-panel');
+    if (!feed.naturalWidth || !feed.naturalHeight) {
+      setTimeout(layoutGrid, 200);   // intrinsic size not known yet (stream still warming up)
+      return;
+    }
+    const ar = feed.naturalWidth / feed.naturalHeight;
+    const pw = panel.clientWidth, ph = panel.clientHeight;
+    let dw, dh;
+    if (pw / ph > ar) { dh = ph; dw = ph * ar; }   // pillarbox (side bars)
+    else              { dw = pw; dh = pw / ar; }    // letterbox (top/bottom bars)
+    overlay.style.width  = dw + 'px';
+    overlay.style.height = dh + 'px';
+    overlay.style.left   = ((pw - dw) / 2) + 'px';
+    overlay.style.top    = ((ph - dh) / 2) + 'px';
+    overlay.classList.add('show');
+  }
+  window.addEventListener('resize', layoutGrid);
+  document.getElementById('feed').addEventListener('load', layoutGrid);
+
   // ── Init ──────────────────────────────────────────────────────────────────
   updateFlipToggle();
+
+  document.getElementById('waveform').value = settings.wave;
+  document.getElementById('duration').value = settings.duration;
+  document.getElementById('duration-val').textContent = settings.duration.toFixed(1) + ' s';
+  updateSoundToggle();
+  updateGridToggle();
+  layoutGrid();
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function post(body) {

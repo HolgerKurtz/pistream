@@ -26,6 +26,8 @@ FLIP_HORIZONTAL=false # false = iPhone (natural), true = built-in FaceTime
 
 DISPLAY_QUALITY=85    # JPEG quality for browser MJPEG stream (1–100)
 
+SOUND_NOTE_DURATION=2.0  # default musical-note length in seconds (1.0–5.0); live-adjustable in UI
+
 BG_HISTORY=500        # MOG2 frame history for background model
 BG_VAR_THRESHOLD=4    # MOG2 sensitivity — kept very low (max sensitivity); brightness filter does the real work
 BIRD_MIN_AREA=10      # min contour area in px² — very small to catch any bird size
